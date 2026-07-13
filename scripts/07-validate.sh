@@ -88,18 +88,40 @@ done
 
 # Accent colour baked into the theme.
 # The full-clone theme derivation (script 03) sed-substitutes the Yaru
-# magenta hex into the Aïobi violet directly in every CSS file rather
-# than shipping an @media (prefers-color-scheme: dark) overlay. We
-# therefore verify the presence of the accent colour in the main
-# gtk.css of each version. gtk-dark.css may or may not carry the token
-# depending on the upstream Yaru variant's file structure.
-grep -qi "#7233CD" "$THEME_DIR/gtk-3.0/gtk.css" 2>/dev/null \
-    && ok "GTK3 gtk.css contains Aïobi violet accent" \
-    || nope "GTK3 gtk.css missing accent token"
+# magenta hex into the Aïobi violet. On Ubuntu 24.04 Yaru bakes the
+# effective CSS into the compiled gtk.gresource bundle rather than into
+# the on-disk .css files, so the presence check has to extract from the
+# gresource. On-disk .css alone would produce false negatives.
 
-grep -qi "#7233CD" "$THEME_DIR/gtk-4.0/gtk.css" 2>/dev/null \
-    && ok "GTK4 gtk.css contains Aïobi violet accent" \
-    || nope "GTK4 gtk.css missing accent token"
+check_theme_accent() {
+    local variant="$1"  # 3.0 or 4.0
+    local gres="$THEME_DIR/gtk-$variant/gtk.gresource"
+    if [ ! -f "$gres" ]; then
+        # Fallback: check any .css files in the tree.
+        if grep -Rqi "#7233CD" "$THEME_DIR/gtk-$variant/" 2>/dev/null; then
+            ok "GTK$variant tree contains Aïobi violet accent (no gresource present)"
+        else
+            nope "GTK$variant no gresource and no CSS accent"
+        fi
+        return
+    fi
+    # List all entries in the gresource and try to extract a stylesheet;
+    # gresource paths look like /com/ubuntu/themes/Yaru-magenta-dark/{3.0,4.0}/…
+    local first_css
+    first_css=$(gresource list "$gres" 2>/dev/null | grep -E '\.css$' | head -1)
+    if [ -z "$first_css" ]; then
+        nope "GTK$variant gresource contains no .css entry"
+        return
+    fi
+    if gresource extract "$gres" "$first_css" 2>/dev/null | grep -qi "#7233CD"; then
+        ok "GTK$variant gresource stylesheet carries Aïobi violet"
+    else
+        nope "GTK$variant gresource stylesheet missing accent token"
+    fi
+}
+
+check_theme_accent 3.0
+check_theme_accent 4.0
 
 # gtk-theme applied — dconf live OR keyfile
 gtk_theme=$(dconf_or_keyfile /org/gnome/desktop/interface/gtk-theme "$BRAND_KEYFILE" "gtk-theme")
@@ -173,9 +195,17 @@ grep -q "^PRETTY_NAME=" /etc/os-release && grep -q "$PROBE" /etc/os-release \
 
 if grep -q "$PROBE" /etc/lsb-release 2>/dev/null; then
     ok "/etc/lsb-release rebranded"
+elif [ -f /etc/systemd/system/aiobi-firstboot-rebrand.service ] \
+  && [ -f /usr/local/sbin/aiobi-firstboot-rebrand.sh ]; then
+    # Inside the Cubic chroot, both /etc/os-release and /etc/lsb-release can
+    # be transparently overwritten by Cubic after script 05 has patched them.
+    # The first-boot rebrand service ships exactly for this case and rewrites
+    # DISTRIB_DESCRIPTION at the first user boot of the installed system.
+    ok "/etc/lsb-release will be rebranded at first boot (Cubic overwrote here, resilience service in place)"
+    echo "         current chroot content (will be corrected at boot):"
+    sed 's/^/           | /' /etc/lsb-release 2>/dev/null
 else
-    nope "/etc/lsb-release not rebranded"
-    # Diagnostic: dump the current file so the failure mode is unambiguous
+    nope "/etc/lsb-release not rebranded and no first-boot resilience service"
     echo "         current /etc/lsb-release content:"
     sed 's/^/           | /' /etc/lsb-release 2>/dev/null || \
         echo "           | (file missing or unreadable)"
