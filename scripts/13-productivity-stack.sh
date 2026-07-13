@@ -65,27 +65,70 @@ apt-get install -y vlc flameshot
 apt-get install -y flatpak
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-# Flatpak resilience helper: Flathub CDN throughput is variable; a single
-# `flatpak install` can stall to sub-100 kB/s under load. We wrap the
-# install in a retry loop (3 attempts) that on each failure marks any
-# partial download for repair via `flatpak repair` before retrying. A
-# soft failure of Flatpak apps is not fatal for the pipeline — the base
-# system remains functional; the missing apps are logged for later.
+# Flatpak resilience helpers.
+#
+# Flathub CDN throughput is variable; a single `flatpak install` can stall
+# to sub-100 kB/s under load. Worse, when a runtime dependency fails to
+# fetch mid-install, Flatpak emits a `Warning: Failed to install …` but
+# continues with the other dependencies and exits with status 0 anyway.
+# A naive `if flatpak install; then success` therefore misses the partial
+# failure: the app is registered but a critical runtime (typically
+# org.freedesktop.Platform.GL.default) is absent, which breaks the app
+# at first launch.
+#
+# We defend against this with a two-step wrapper:
+#   1. Run the install under a wall-clock timeout.
+#   2. Verify that the app AND the critical runtimes are actually present
+#      via `flatpak list --columns=ref`. If any are missing, treat the
+#      attempt as a failure and go through `flatpak repair --system`
+#      before retrying (up to 3 attempts total).
+
+flatpak_ref_installed() {
+    # Returns success if the given ref (app or runtime) is installed.
+    # We use --columns=ref which prints just the ref column, then match
+    # by prefix so branch differences (e.g. //25.08 vs //stable) do not
+    # trip the check.
+    flatpak list --columns=ref 2>/dev/null | awk -F/ '{print $1}' | grep -Fxq "$1"
+}
+
+verify_flatpak_install() {
+    local app="$1"
+    local critical
+    if ! flatpak_ref_installed "$app"; then
+        echo "  ✗ post-check: app $app not installed"
+        return 1
+    fi
+    for critical in \
+        org.freedesktop.Platform \
+        org.freedesktop.Platform.GL.default
+    do
+        if ! flatpak_ref_installed "$critical"; then
+            echo "  ✗ post-check: critical runtime $critical missing"
+            return 1
+        fi
+    done
+    echo "  ✓ post-check: $app + critical runtimes all present"
+    return 0
+}
+
 flatpak_install_with_retry() {
     local remote="$1"
     local app="$2"
-    local attempt
+    local attempt rc
     for attempt in 1 2 3; do
         echo "  flatpak install attempt $attempt: $app"
-        if timeout 900 flatpak install -y --noninteractive "$remote" "$app"; then
+        timeout 900 flatpak install -y --noninteractive "$remote" "$app"
+        rc=$?
+        if [ "$rc" -eq 0 ] && verify_flatpak_install "$app"; then
             return 0
         fi
-        echo "  attempt $attempt failed (timeout or fetch error) — repairing before retry"
+        echo "  attempt $attempt failed (rc=$rc or post-check failed) — repairing before retry"
         flatpak repair --system 2>/dev/null || true
         sleep 5
     done
     echo "  ⚠ giving up on $app after 3 attempts (Flathub CDN unreachable or too slow)"
-    echo "    the missing app can be installed later with: flatpak install flathub $app"
+    echo "    manual recovery command:"
+    echo "      flatpak install -y --or-update flathub $app"
     return 1
 }
 
