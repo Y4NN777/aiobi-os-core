@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Aïobi OS — US-1.6 close — productivity stack
+# Aïobi OS — Step 13 — Productivity stack
 # ----------------------------------------------------------------------------
-# Purpose : install the Sprint 1 productivity app set:
+# Purpose : install the default productivity application set:
 #           OnlyOffice (.deb from vendor), Brave (vendor apt repo),
-#           VLC + Flameshot (Ubuntu universe), PeaZip + AppFlowy (Flatpak).
+#           VLC + Flameshot (Ubuntu universe), PeaZip + AppFlowy (Flatpak
+#           from Flathub, as neither is packaged natively in Ubuntu 24.04).
 #
-# Closes  : US-1.6 CA-1 (OnlyOffice + .docx test) — milestone S1 passage #5.
-#           US-1.6 CA-2 (AppFlowy pre-installed).
-#           US-1.6 CA-3 (Brave, VLC, PeaZip, Flameshot pre-configured).
+# Delivers : OnlyOffice as default .docx handler, Brave as alternate browser,
+#            VLC + Flameshot + PeaZip + AppFlowy pre-installed.
 #
-# References :
-#   - Log 5 §2.15 (this fix documented + demo.docx test)
-#   - Log 5 §5 Issue 31 (apt install -y hangs on OnlyOffice EULA prompt)
-#   - Log 5 §5 Issue 32 (peazip absent from Ubuntu 24.04 repos → Flatpak fallback)
+# Non-interactive apt caveat
+#   OnlyOffice's postinst script exposes an interactive EULA that blocks
+#   `apt install -y`. The script therefore exports
+#   DEBIAN_FRONTEND=noninteractive and DEBCONF_NONINTERACTIVE_SEEN=true
+#   before the OnlyOffice install to accept the EULA silently.
 #
-# Idempotent: apt install is idempotent; wget only if not already downloaded;
-# flatpak install --if-not-exists.
+# Idempotent: apt install is idempotent; wget only fires if the .deb is
+# absent; flatpak install uses --if-not-exists on the remote.
 #
-# Ordering: standalone. Recommended late in the pipeline (after 04-install-icons
-# because both use apt heavily, and after 11-apt-brand-alias if you want the
-# alias visible during install output).
+# Ordering: standalone. Recommended late in the pipeline (after
+# 04-install-icons.sh because both use apt heavily, and after
+# 11-apt-brand-alias.sh if the alias should be visible during install
+# output).
 # ============================================================================
 
 set -euo pipefail
@@ -28,7 +30,7 @@ set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "Must run as root (sudo)."; exit 1; }
 
 # Suppress apt EULA prompts (OnlyOffice ships an interactive EULA that
-# blocks apt install -y otherwise — Issue 31).
+# blocks apt install -y otherwise).
 export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
 
@@ -58,7 +60,7 @@ apt-get install -y vlc flameshot
 
 # --- 4. Flatpak infrastructure ----------------------------------------------
 # PeaZip and AppFlowy both ship as Flatpaks from Flathub — Ubuntu 24.04 does
-# not package PeaZip in its repos (Issue 32) and AppFlowy is Rust-based with
+# not package PeaZip in its repos and AppFlowy is Rust-based with
 # no official .deb, only Flatpak/AppImage.
 apt-get install -y flatpak
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo

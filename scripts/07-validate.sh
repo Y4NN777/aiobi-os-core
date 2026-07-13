@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 07 — Validation (PASS/FAIL per Acceptance Criterion)
+# Aïobi OS — Step 07 — Validation (PASS/FAIL per Acceptance Criterion)
 # =============================================================================
 # Run AFTER 01..06. Exits non-zero if any check fails — chainable into CI.
 #
@@ -17,7 +17,7 @@ nope() { printf "  ${red}FAIL${reset}  %s\n" "$1"; fail=$((fail+1)); }
 warn() { printf "  ${yellow}WARN${reset}  %s\n" "$1"; }
 
 fail=0
-echo "===== Aïobi US-1.4 validation ====="
+echo "===== Aïobi validation ====="
 
 # Detect chroot / no-session: when DBUS_SESSION_BUS_ADDRESS is unset OR
 # /run/user/$EUID/dconf doesn't exist, `dconf read` returns empty even for

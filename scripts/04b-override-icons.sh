@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 04b — Override placeholders with Kaleb's Sprint 2 SVGs
+# Aïobi OS — Step 04b — Override placeholders with the final Aïobi icon set
 # =============================================================================
 # WHAT
-#   When Kaleb delivers the final Aïobi icon SVGs in Sprint 2, drop them into
+#   When delivers the final Aïobi icon SVGsin a later iteration, drop them into
 #   ./icons-sprint2/ (same filenames as the 5 placeholders from script 04):
 #     - aiobi-start-menu.svg
 #     - aiobi-ai-terminal.svg
@@ -18,7 +18,7 @@
 #     5. Refreshes the icon cache.
 #
 # WHY a separate script
-#   Sprint 2 should not require re-running 04 (which would re-audit + re-sed
+#   later-iteration should not require re-running 04 (which would re-audit + re-sed
 #   Papirus — slow and unnecessary). 04b is the surgical update path:
 #   placeholder-only swap, no Papirus touch.
 #
@@ -43,10 +43,10 @@ EXPECTED=(
     aiobi-firewall-status.svg
 )
 
-echo "==> Aïobi US-1.4 / 04b-override-icons.sh"
+echo "==> Aïobi — 04b-override-icons.sh"
 echo "  source: $SRC_DIR"
 
-[ -d "$SRC_DIR" ] || { echo "ERROR: $SRC_DIR missing — drop Kaleb's SVGs there first"; exit 1; }
+[ -d "$SRC_DIR" ] || { echo "ERROR: $SRC_DIR missing — drop the final SVGs there first"; exit 1; }
 [ -d "$DEST_DIR" ] || { echo "ERROR: $DEST_DIR missing — run script 04 first"; exit 1; }
 
 # Validate all expected files are present before any write
@@ -63,7 +63,7 @@ fi
 # Back up Sprint-1 placeholders on first run only
 if [ ! -d "$SPRINT1_BAK" ]; then
     cp -a "$DEST_DIR" "$SPRINT1_BAK"
-    echo "  Sprint 1 backup → $SPRINT1_BAK"
+    echo "  initial backup → $SPRINT1_BAK"
 fi
 
 # Swap SVGs

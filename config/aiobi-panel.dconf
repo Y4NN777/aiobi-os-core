@@ -34,11 +34,11 @@ show-favorites=true
 isolate-workspaces=false
 isolate-monitors=false
 
-# Intellihide — DISABLED (Bug C Day 5). Root cause: user right-click "Lock
+# Intellihide — DISABLED (later iteration). Root cause: user right-click "Lock
 # taskbar" toggles `taskbar-locked` which controls EDIT permission, NOT
 # visibility. UX-trap resolved by shipping intellihide=false as default —
 # panel always visible, no ambiguity. Users can opt back in via right-click.
-# See Log 5 §2.2.
+# A user right-click "Lock the taskbar" toggle sets a separate flag (dash-to-panel-taskbar-locked); intellihide is the one that controls auto-hide behaviour.
 intellihide=false
 intellihide-behaviour='ALL_WINDOWS'
 

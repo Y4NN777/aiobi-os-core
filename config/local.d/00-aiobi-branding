@@ -7,11 +7,11 @@
 #
 # Source: https://help.gnome.org/admin/system-admin-guide/stable/dconf-keyfiles.html
 #
-# Day 5 updates (Log 5 §2.6 + §2.7):
+# Additional keys installed alongside the initial branding:
 #   - Fonts changed Satoshi → Inter (Satoshi is app-level design system,
 #     not OS-level; Inter is neutral system font, ships in Ubuntu universe
 #     via `fonts-inter` package — installed by 06-apply-persistence.sh).
-#   - user-theme.name changed '' → 'Aiobi' (Bug B fix, ships shell theme
+#   - user-theme.name changed '' → 'Aiobi' (activates the shipped shell theme
 #     Aïobi installed by 08-inject-shell-theme.sh).
 
 [org/gnome/desktop/interface]
@@ -23,7 +23,7 @@ document-font-name='Inter 11'
 monospace-font-name='JetBrains Mono 11'
 
 [org/gnome/shell/extensions/user-theme]
-# Day 5: activated Aïobi shell theme. Requires gnome-shell-extensions package
+# Aïobi shell theme activation. Requires gnome-shell-extensions package
 # (provides user-theme extension) — installed by 06-apply-persistence.sh.
 # The Aïobi shell theme itself is installed by 08-inject-shell-theme.sh.
 name='Aiobi'

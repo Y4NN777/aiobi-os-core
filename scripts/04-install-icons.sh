@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 04 — Icon theme (Papirus recolor + Aïobi placeholders)
+# Aïobi OS — Step 04 — Icon theme (Papirus recolor + Aïobi placeholders)
 # =============================================================================
 # WHAT
 #   1. Install Papirus, Papirus-Dark, Papirus-Light via the official PPA.
@@ -94,7 +94,7 @@ APP_NEVER=(
     onlyoffice-desktopeditors
 )
 
-echo "==> Aïobi US-1.4 / 04-install-icons.sh"
+echo "==> Aïobi — 04-install-icons.sh"
 
 # ----- 1) Install Papirus PPA + packages -------------------------------------
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq software-properties-common

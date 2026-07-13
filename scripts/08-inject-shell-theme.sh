@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Aïobi OS — US-1.4 polish Day 5 — inject Aïobi gnome-shell theme
+# Aïobi OS — Step 08 — Inject Aïobi gnome-shell theme
 # ----------------------------------------------------------------------------
 # Purpose : ship a gnome-shell theme "Aiobi" cloned from Yaru-magenta-dark with
 #           the primary magenta hex #B34CB3 sed-replaced by Aïobi violet #7233CD.
 #           Installed at /usr/share/themes/Aiobi/gnome-shell/, activated via the
 #           user-theme extension (gnome-shell-extensions package).
 #
-# Solves  : Bug B (Log 5 §2.6) — Day 4 shipped user-theme.name='' (empty),
-#           so the GNOME Shell top bar (calendar dropdown, Activities search,
-#           Quick Settings) fell back to Yaru default. Additionally the
-#           `gnome-shell-extensions` metapackage that provides the `user-theme`
-#           extension was not installed on the Day 4 ISO.
+# Rationale
+#   An overlay approach that only sets user-theme.name in dconf without
+#   shipping the theme itself leaves the GNOME Shell top bar (calendar
+#   dropdown, Activities search, Quick Settings) falling back to the Yaru
+#   default; and the `gnome-shell-extensions` metapackage that provides the
+#   `user-theme` extension must be installed for the dconf key to have any
+#   consumer.
 #
-# References :
-#   - Log 5 §2.6 (this fix documented step-by-step)
+# References
 #   - Yaru upstream common/accent-colors.scss.in — magenta primary #B34CB3
 #     https://github.com/ubuntu/yaru/blob/master/common/accent-colors.scss.in
 #

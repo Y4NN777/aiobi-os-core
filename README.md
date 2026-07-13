@@ -43,20 +43,20 @@ aiobi-os-core/
 │   ├── 04b-override-icons.sh       # Later-sprint icon swap
 │   ├── 05-rebrand-os.sh            # OS identity + GRUB + MOTD + first-boot service
 │   ├── 06-apply-persistence.sh     # dconf profile + locks + skel + fonts
-│   ├── 07-validate-us14.sh         # PASS/FAIL check against milestone criteria
+│   ├── 07-validate.sh              # PASS/FAIL check against milestone criteria
 │   ├── 08-inject-shell-theme.sh    # GNOME Shell theme (Yaru clone + sed)
 │   ├── 09-terminal-profile.sh      # GNOME Terminal palette
 │   ├── 10-snap-final-purge.sh      # snap removal + APT pin
 │   ├── 11-apt-brand-alias.sh       # /etc/hosts + DEB822 mirror alias
 │   ├── 12-wine-proton-install.sh   # Wine 9.0 + GE-Proton + MIME handlers
 │   ├── 13-productivity-stack.sh    # OnlyOffice + Brave + VLC + Flameshot + Flatpaks
-│   └── 14-day5-polish-all.sh       # orchestrator (chains 01–13 + 07)
+│   └── 14-run-all.sh               # orchestrator (chains 01–13 + 07)
 ├── config/
 │   ├── dconf-profile               # /etc/dconf/profile/user
 │   ├── aiobi-panel.dconf           # /etc/dconf/db/local.d/20-aiobi-panel
 │   └── local.d/
 │       └── 00-aiobi-branding       # gtk/icon/font system defaults
-├── aiobi-theme/                    # legacy overlay stylesheets (V1, superseded by 03)
+├── aiobi-theme/                    # legacy overlay stylesheets (superseded by script 03)
 └── icons/                          # AI-native SVG placeholders
 ```
 
@@ -72,7 +72,7 @@ scp -r aiobi-os-core/ <chroot-host>:/tmp/
 cd /tmp/aiobi-os-core
 
 # 3. Recommended --- one-shot orchestrator (runs all layers + validation):
-bash scripts/14-day5-polish-all.sh
+bash scripts/14-run-all.sh
 
 # Or run individually, in this order:
 bash scripts/01-install-extensions.sh
@@ -87,7 +87,7 @@ bash scripts/11-apt-brand-alias.sh
 bash scripts/12-wine-proton-install.sh
 bash scripts/13-productivity-stack.sh
 bash scripts/06-apply-persistence.sh
-bash scripts/07-validate-us14.sh
+bash scripts/07-validate.sh
 ```
 
 ### On an installed VM (post-install polish)

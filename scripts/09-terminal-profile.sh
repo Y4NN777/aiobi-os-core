@@ -1,28 +1,27 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Aïobi OS — US-1.4 polish Day 5 — GNOME Terminal profile Aïobi palette
+# Aïobi OS — Step 09 — GNOME Terminal profile Aïobi palette
 # ----------------------------------------------------------------------------
 # Purpose : detach the default gnome-terminal profile from GTK theme colors
 #           and inject an Aïobi 16-color palette + brand background/cursor.
 #
-# Solves  : Bug E (Log 5 §2.7) — Day 4 GNOME Terminal shipped with Ubuntu's
-#           default aubergine bg #380C2A + Ubuntu ANSI palette, unaffected by
-#           our GTK theme (terminal profile is a separate dconf tree).
+# Rationale
+#   Without this pass, GNOME Terminal ships with Ubuntu's default aubergine
+#   background (#380C2A) and Ubuntu ANSI palette; the terminal profile is a
+#   separate dconf subtree and is not affected by the GTK theme injection
+#   performed in step 03.
 #
-# Twist   : gnome-terminal lazy-creates its default profile — `dconf list
-#           /org/gnome/terminal/legacy/profiles:/` returns empty until first
-#           dconf write. Resolve the UUID via `gsettings get
-#           org.gnome.Terminal.ProfilesList default` which reads from the
-#           ProfilesList schema (initialised at first terminal launch).
-#
-# References :
-#   - Log 5 §2.7 (this fix documented)
-#   - Log 5 §5 Issue 29 (UUID discovery pattern)
+# Twist  : gnome-terminal lazy-creates its default profile — `dconf list
+#          /org/gnome/terminal/legacy/profiles:/` returns empty until the
+#          first dconf write. The UUID is resolved via `gsettings get
+#          org.gnome.Terminal.ProfilesList default`, which reads the
+#          ProfilesList schema initialised at first terminal launch.
 #
 # Idempotent: re-running overwrites the same dconf keys.
 #
-# Ordering: standalone. Can run any time before user first opens terminal on
-# the shipped system. In practice run alongside other Day 5 polish scripts.
+# Ordering: standalone. Can run any time before the user first opens the
+# terminal on the shipped system. Typically run alongside the other polish
+# scripts.
 # ============================================================================
 
 set -euo pipefail

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 01 — Install GNOME extensions (dash-to-panel)
+# Aïobi OS — Step 01 — Install GNOME extensions (dash-to-panel)
 # =============================================================================
 # WHAT
 #   - Installs `dash-to-panel` system-wide so every user inherits it.
@@ -38,7 +38,7 @@ RELEASE_URL="https://github.com/home-sweet-gnome/dash-to-panel/releases/latest/d
 
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: must run as root (sudo)"; exit 1; }
 
-echo "==> Aïobi US-1.4 / 01-install-extensions.sh"
+echo "==> Aïobi — 01-install-extensions.sh"
 
 # Refresh apt index quietly; ignore failure (offline build host case)
 apt-get update -qq || true

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 05 — Rebrand the OS identity (About panel)
+# Aïobi OS — Step 05 — Rebrand the OS identity (About panel)
 # =============================================================================
 # WHAT
 #   Updates the three files GNOME Settings → About reads from:
@@ -24,10 +24,10 @@
 #   SUPPORT_URL / BUG_REPORT_URL / LOGO).
 #
 # UTF-8 ï handling
-#   Heredoc + `cat` would normally pass through fine, but earlier work in
-#   this repo hit shells stripping the tréma (Log_of_day_3 §5 / Issue 18).
-#   We reconstruct ï via `printf '\xc3\xaf'` and inject the byte sequence
-#   directly, then verify with `grep -P` that the bytes round-tripped.
+#   Heredoc + `cat` would normally pass through fine, but some shells strip
+#   the tréma silently under certain locale conditions. We reconstruct ï via
+#   `printf '\xc3\xaf'` and inject the byte sequence directly, then verify
+#   with `grep -P` that the bytes round-tripped.
 #
 # SOURCES
 #   - https://www.freedesktop.org/software/systemd/man/os-release.html
@@ -42,7 +42,7 @@ set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: must run as root (sudo)"; exit 1; }
 
-echo "==> Aïobi US-1.4 / 05-rebrand-os.sh"
+echo "==> Aïobi — 05-rebrand-os.sh"
 
 # Reconstruct ï as the literal UTF-8 byte pair (0xc3 0xaf) — bypasses any
 # upstream encoding mangling.
@@ -113,10 +113,10 @@ else
 fi
 
 # =============================================================================
-# Day 5 additions (Log 5 §2.10 + §2.11)
+# Additional identity surfaces: hostname, GRUB, MOTD, autostart, first-boot
 # =============================================================================
 
-# ----- 6) Default hostname (Bug D — Log 5 §2.3) -----------------------------
+# ----- 6) Default hostname --------------------------------------------------
 # Ubuntu installer templates the hostname as `firstname-lastname-<QEMU-machine>`
 # by default. We set an Aïobi-branded baseline in the chroot; the installer
 # may still overwrite at install time if the user provides input in the
@@ -126,7 +126,7 @@ sed -i '/127\.0\.1\.1/d' /etc/hosts 2>/dev/null || true
 echo "127.0.1.1  aiobi" >> /etc/hosts
 echo "  hostname set to 'aiobi'"
 
-# ----- 7) GRUB_DISTRIBUTOR (Log 5 §2.11) ------------------------------------
+# ----- 7) GRUB_DISTRIBUTOR ------------------------------------
 # Without this, update-grub falls back to `lsb_release -i -s` which returns
 # unpredictable values on rebranded systems (observed: `GNU/Linux` as menu
 # entry prefix). Explicit distributor = correct menu labels.
@@ -142,7 +142,7 @@ if [ -f /etc/default/grub ]; then
     echo "  GRUB_DISTRIBUTOR set"
 fi
 
-# ----- 8) MOTD debloat (Log 5 §2.11) ----------------------------------------
+# ----- 8) MOTD debloat ----------------------------------------
 # /etc/update-motd.d/ contains 11 Ubuntu-branded scripts. Neutralise via
 # `chmod -x` (safer than deletion — Ubuntu package updates restore the +x bit
 # on the individual scripts; we can re-neutralise via re-running this
@@ -164,7 +164,7 @@ EOF
 chmod +x /etc/update-motd.d/00-aiobi-header
 echo "  MOTD debloated, Aïobi header shipped"
 
-# ----- 9) Ubuntu Advantage notification kill (Log 5 §2.11) ------------------
+# ----- 9) Ubuntu Advantage notification kill ------------------
 # /etc/xdg/autostart/ubuntu-advantage-notification.desktop autostarts a
 # Canonical popup nagging about Ubuntu Pro. Append Hidden=true to disable
 # without deleting (delete would be restored by ubuntu-advantage-tools
@@ -180,11 +180,11 @@ EOF
     fi
 fi
 
-# ----- 10) First-boot systemd oneshot — PRETTY_NAME Cubic-resistance --------
-# Cubic Generate overwrites /etc/os-release's PRETTY_NAME field at ISO build
-# time with a build timestamp string ("Ubuntu 24.04.4 1.0.0-2026.04.28 (Cubic
-# YYYY-MM-DD hh:mm)") — see Log 5 §5 Issue 26. This service reverts to
-# Aïobi PRETTY_NAME at first user boot then disables itself.
+# ----- 10) First-boot systemd oneshot — PRETTY_NAME resilience --------------
+# The Cubic ISO builder overwrites the PRETTY_NAME field of /etc/os-release
+# at ISO generation time with a build-timestamp string. This service reverts
+# PRETTY_NAME to the Aïobi value on the first user boot of the installed
+# system and then disables itself.
 tee /etc/systemd/system/aiobi-firstboot-rebrand.service > /dev/null << 'EOF'
 [Unit]
 Description=Aïobi OS — first-boot rebrand of PRETTY_NAME (Cubic-resistance)
@@ -203,7 +203,7 @@ EOF
 
 tee /usr/local/sbin/aiobi-firstboot-rebrand.sh > /dev/null << 'EOF'
 #!/usr/bin/env bash
-# Aïobi OS — first-boot rebrand (Cubic PRETTY_NAME overwrite recovery)
+# Aïobi OS — first-boot PRETTY_NAME resilience (post-ISO-build overwrite recovery)
 set -e
 I_TREMA=$(printf '\xc3\xaf')
 PRETTY="A${I_TREMA}obi OS 1.0"

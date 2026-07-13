@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Aïobi OS — US-1.5 close — Wine + Proton (Windows interop)
+# Aïobi OS — Step 12 — Wine + Proton (Windows interoperability)
 # ----------------------------------------------------------------------------
 # Purpose : install Wine 9.0 + i386 multiarch + Steam-installer (which pulls
 #           Proton on first Steam launch) + GE-Proton (custom Proton variant,
-#           standalone x86_64 binary) + MIME handlers for .exe/.msi so double-
-#           click on file manager launches through Wine.
+#           standalone x86_64 binary) + MIME handlers for .exe / .msi so a
+#           double-click in the file manager launches through Wine.
 #
-# Closes  : US-1.5 CA-1 (Wine + Proton installed silently in chroot).
-#           US-1.5 CA-2 (.exe double-click via compatibility layer).
-#           Milestone S1 passage criterion #4 (.exe execution).
+# Delivers : Wine + Proton installed silently inside the chroot; .exe
+#            double-click routed through the compatibility layer; acceptance
+#            criterion .exe execution satisfied.
 #
-# References :
-#   - Log 5 §2.14 (this fix documented + PsInfo test)
-#   - Log 5 §5 Issue 30 (proton-ge-custom URL grep — MUST filter -v aarch64
-#     to pick x86_64 tarball; GitHub Releases API returns assets in non-
-#     deterministic order and head -1 picks the wrong architecture ~50% of runs)
+# Architecture caveat (GE-Proton download)
+#   The GitHub Releases API returns assets in non-deterministic order; a
+#   naive `head -1` picks the aarch64 tarball roughly half the time. The
+#   asset selector must therefore filter with `grep -v aarch64` before
+#   `head -1`, or the downloaded binary will not execute on x86_64.
 #
-# Idempotent: apt install is idempotent; GE-Proton tarball only downloaded if
-# not present; symlink recreated with -f.
+# Idempotent: apt install is idempotent; the GE-Proton tarball is only
+# downloaded if not present; the symlink is recreated with `ln -f`.
 #
 # Ordering: standalone. Recommended AFTER 04-install-icons.sh (heavy apt use
-# already done) and BEFORE 13-productivity-stack.sh (light coordinate ordering).
+# already done) and BEFORE 13-productivity-stack.sh.
 # ============================================================================
 
 set -euo pipefail
@@ -44,12 +44,12 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     steam-installer
 
 # NOTE: we intentionally do NOT run `wineboot --init` in this script.
-# Reason: it creates ~/.wine/ tree at install time. If mksquashfs (used by
-# linux-live-kit or similar tools) runs concurrently, it hits a race
-# condition and captures empty file placeholders in the ISO (Log 5 §5
-# Issue 35). Let Wine's prefix be created at the user's first `wine` call
-# on the installed system — this aligns with the runtime-first workflow of
-# §4.5 (initialisation belongs to the user's session, not to the ISO).
+# Reason: it creates the ~/.wine/ tree at install time. If mksquashfs runs
+# concurrently (as it does under some ISO-packaging tools that capture a
+# running VM state), it hits a race and captures empty file placeholders
+# in the ISO. Let Wine's prefix be created at the user's first `wine` call
+# on the installed system — initialisation belongs to the user's session,
+# not to the ISO build stage.
 
 # --- 3. Install GE-Proton (standalone x86_64 tarball) -----------------------
 # GloriousEggroll's Proton-GE fork — improved compat for games + apps vs
@@ -57,7 +57,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 # can be invoked without Steam being launched.
 mkdir -p "${USER_HOME}/.steam/root/compatibilitytools.d"
 
-# CRITICAL: filter out aarch64 to pick x86_64 (Issue 30)
+# CRITICAL: filter out aarch64 to pick x86_64
 # GitHub Releases API returns assets in non-deterministic order — head -1
 # picks the wrong arch ~50% of runs unless grep -v aarch64 first.
 if ! ls -d "${USER_HOME}"/.steam/root/compatibilitytools.d/GE-Proton*/ 2>/dev/null | head -1 >/dev/null; then

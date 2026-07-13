@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 02 — Configure dash-to-panel via system dconf
+# Aïobi OS — Step 02 — Configure dash-to-panel via system dconf
 # =============================================================================
 # WHAT
 #   Copies config/aiobi-panel.dconf into /etc/dconf/db/local.d/20-aiobi-panel
@@ -31,7 +31,7 @@ DEST="$DEST_DIR/20-aiobi-panel"
 PROFILE_SRC="$HERE/config/dconf-profile"
 PROFILE_DEST="/etc/dconf/profile/user"
 
-echo "==> Aïobi US-1.4 / 02-configure-panel.sh"
+echo "==> Aïobi — 02-configure-panel.sh"
 
 [ -f "$SRC" ] || { echo "ERROR: $SRC missing — checkout incomplete"; exit 1; }
 

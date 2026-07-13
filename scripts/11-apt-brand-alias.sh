@@ -1,36 +1,33 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Aïobi OS — soft-brand mirror alias — /etc/hosts + DEB822 rewrite
+# Aïobi OS — Step 11 — Soft-brand mirror alias (/etc/hosts + DEB822 rewrite)
 # ----------------------------------------------------------------------------
-# Purpose : rewrite the Ubuntu apt mirror hostnames in output ONLY (URIs shown
-#           in `apt update`, `apt install`, etc.) from `bf.archive.ubuntu.com`
-#           and `security.ubuntu.com` to `mirror.aiobi.local` and
+# Purpose : rewrite the Ubuntu apt mirror hostnames shown in `apt update` /
+#           `apt install` output from `bf.archive.ubuntu.com` and
+#           `security.ubuntu.com` to `mirror.aiobi.local` and
 #           `security.aiobi.local`, mapped in /etc/hosts to the real Canonical
-#           IPs. Cosmetic alias — Canonical infrastructure (IPs, repo path)
-#           preserved.
+#           IPs. Cosmetic alias only — Canonical infrastructure (IP endpoints,
+#           repository paths) is preserved.
 #
-# Solves  : Log 5 §2.12 — Ubuntu-branded hostnames were visible in every
-#           apt output despite full display-layer rebrand. Running our own
-#           packages.aiobi.com mirror is out of MVP scope; DNS-alias soft-brand
-#           is the pragmatic middle ground.
+# Rationale
+#   Ubuntu-branded mirror hostnames are visible in every apt output despite a
+#   full display-layer rebrand. Standing up an own mirror at
+#   packages.aiobi.com is out of first-release scope; a DNS-alias soft-brand
+#   is the pragmatic middle ground.
 #
-# References :
-#   - Log 5 §2.12 (fix documented)
-#   - Log 5 §4.3 (brand-identity vs platform-identity separation rationale)
-#   - Log 5 §5 Issue 27 (Ubuntu 24.04 DEB822 sources format)
-#   - Log 5 §5 Issue 28 (IPv6 unreachable in NAT-only VM)
-#
-# Idempotent: /etc/hosts entries removed if present before re-adding; sed
-# rewrite of ubuntu.sources is idempotent via bak-restore pattern.
+# Idempotent: /etc/hosts entries are removed if present before re-adding;
+# the sed rewrite of ubuntu.sources restores from a `.bak` on subsequent runs.
 #
 # Fragility caveat: Canonical rotates round-robin IPs on their mirrors. If the
 # IPs pinned in /etc/hosts disappear from Canonical DNS, apt breaks until
-# re-resolved. V1.1 planned improvement: local dnsmasq CNAME OR first-boot
-# service re-resolves + rewrites /etc/hosts on each boot.
+# re-resolved. A planned improvement for a subsequent release is a local
+# dnsmasq CNAME or a first-boot service that re-resolves and rewrites
+# /etc/hosts on each boot.
 #
 # Ordering: standalone. Run any time after 04-install-icons.sh (which uses
 # apt heavily and would be confused by mid-run alias switching). Recommended:
-# after all apt-based install scripts (04, 06, 12, 13) — as a final cosmetic pass.
+# after all apt-based install scripts (04, 06, 12, 13) — as a final cosmetic
+# pass.
 # ============================================================================
 
 set -euo pipefail
@@ -39,7 +36,7 @@ set -euo pipefail
 
 # --- 1. Resolve real Canonical IPv4 addresses --------------------------------
 # Force IPv4: getent hosts returns IPv6 first in mixed-DNS zones. IPv6 is
-# unreachable in NAT-only virt-manager VM (Issue 28).
+# unreachable in NAT-only virt-manager VM.
 BF_IPV4=$(getent ahostsv4 bf.archive.ubuntu.com 2>/dev/null | awk 'NR==1{print $1}')
 SEC_IPV4=$(getent ahostsv4 security.ubuntu.com 2>/dev/null | awk 'NR==1{print $1}')
 

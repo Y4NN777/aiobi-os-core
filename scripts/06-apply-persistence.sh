@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 06 — System-wide persistence (dconf profile + skel)
+# Aïobi OS — Step 06 — System-wide persistence (dconf profile + skel)
 # =============================================================================
 # WHAT
 #   1. Install /etc/dconf/profile/user pointing user-db over system-db local.
@@ -44,17 +44,17 @@ DCONF_PROFILE="/etc/dconf/profile/user"
 DCONF_LOCAL_D="/etc/dconf/db/local.d"
 DCONF_LOCKS="$DCONF_LOCAL_D/locks"
 
-echo "==> Aïobi US-1.4 / 06-apply-persistence.sh"
+echo "==> Aïobi — 06-apply-persistence.sh"
 
-# Day 5 addition: install packages required by our system-wide dconf defaults
-# (Log 5 §2.6 + §2.7):
-#   - gnome-shell-extensions: provides user-theme extension referenced by
-#     00-aiobi-branding's `user-theme.name='Aiobi'` (else the dconf key is
-#     set but no consumer applies the shell theme).
-#   - fonts-inter: our Day 5 update changed font-name from 'Satoshi 11' to
-#     'Inter 11' — Satoshi is app-level design system, Inter is neutral
-#     system font. Without fonts-inter installed, GNOME falls back to
-#     DejaVu/Ubuntu-font (defeats the rebrand).
+# Install packages required by the system-wide dconf defaults installed
+# below:
+#   - gnome-shell-extensions: provides the user-theme extension referenced
+#     by 00-aiobi-branding's `user-theme.name='Aiobi'` (else the dconf key
+#     is set but no consumer applies the shell theme).
+#   - fonts-inter: the system font-name is set to 'Inter 11' (Inter is
+#     retained as the neutral system font; Satoshi is reserved for the
+#     application-level design system). Without fonts-inter installed,
+#     GNOME falls back to DejaVu / Ubuntu-font and the rebrand is defeated.
 #   - fonts-jetbrains-mono: matches monospace-font-name='JetBrains Mono 11'.
 export DEBIAN_FRONTEND=noninteractive
 apt-get install -y gnome-shell-extensions fonts-inter fonts-jetbrains-mono || \

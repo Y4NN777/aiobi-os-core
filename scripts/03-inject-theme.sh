@@ -1,51 +1,49 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Aïobi OS — US-1.4 / Step 03 — Inject Aïobi GTK theme (V2 REWRITE Day 5)
+# Aïobi OS — Step 03 — Inject Aïobi GTK theme
 # =============================================================================
-# WHAT (Day 5 REWRITE)
-#   Ships /usr/share/themes/Aiobi/ as a FULL CLONE of Yaru-magenta-dark
+# WHAT
+#   Ships /usr/share/themes/Aiobi/ as a full clone of Yaru-magenta-dark
 #   with the primary Yaru magenta hex #B34CB3 sed-replaced by Aïobi violet
 #   #7233CD. Both the loose CSS files (gtk-3.0/gtk.css, gtk-4.0/gtk.css)
 #   AND the compiled gtk.gresource bundles are patched.
 #
-# WHY REWRITE (regression from Day 4 V1)
-#   Day 4 V1 shipped an OVERLAY approach: /usr/share/themes/Aiobi/gtk-3.0/
-#   contained ~30 selectors that ASSUMED Adwaita would fill missing rules
-#   under the hood. This works for libadwaita GTK4 (@define-color overrides
-#   Adwaita's baked stylesheet), but is STRUCTURALLY WRONG for GTK3 —
-#   GTK3 loads exactly the CSS in /usr/share/themes/<name>/gtk-3.0/gtk.css
-#   and applies CSS defaults (transparent!) for any undefined selector.
-#   Result at first boot QA: every GTK3 app (Rhythmbox, LibreOffice,
-#   Terminal, Image Viewer) rendered with transparent window backgrounds,
-#   collapsed header bars, invisible menus.
+# WHY a full clone rather than an overlay stylesheet
+#   An overlay approach ships /usr/share/themes/Aiobi/gtk-3.0/gtk.css
+#   with only the ~30 selectors that differ from Adwaita and assumes
+#   Adwaita will fill the missing rules under the hood. This works for
+#   libadwaita GTK4 (@define-color overrides Adwaita's baked stylesheet),
+#   but is structurally wrong for GTK3 — GTK3 loads exactly the CSS placed
+#   at /usr/share/themes/<name>/gtk-3.0/gtk.css and applies CSS defaults
+#   (transparent!) for every selector left unspecified. Every GTK3 app
+#   (LibreOffice, Rhythmbox, the file manager) then renders with
+#   transparent window backgrounds, collapsed header bars, invisible menus.
 #
-#   V2 fix: clone Yaru's FULL theme tree (~3000 lines of complete CSS +
-#   all assets) and inject Aïobi accent via sed. Costs code volume but
-#   gains behavioural completeness.
+#   The corrected approach clones Yaru's full theme tree (~3000 lines of
+#   complete CSS plus all assets) and injects the Aïobi accent via sed.
+#   Costs disk space; buys behavioural completeness across GTK3 and GTK4.
 #
-# GRESOURCE PATCH (Day 5 §2.5 pattern)
-#   Yaru also ships gtk.gresource (compiled binary bundle) containing
-#   additional embedded CSS + SVG symbolics + PNG raster assets that
-#   GTK3/4 loads in parallel to the on-disk CSS. Text sed doesn't touch
-#   binary — we extract every entry, sed CSS + SVG entries only (PNG
-#   rasters cannot be sed-recolored, documented V1.1 limitation),
-#   regenerate manifest, glib-compile-resources, install.
+# GRESOURCE PATCH
+#   Yaru also ships gtk.gresource (a compiled binary bundle) containing
+#   additional embedded CSS, SVG symbolics, and PNG raster assets that
+#   GTK3/4 loads in parallel to the on-disk CSS. A text sed does not
+#   reach binary content — we extract every entry, sed the CSS and SVG
+#   entries only (PNG rasters cannot be sed-recoloured, a known
+#   limitation), regenerate the manifest, and recompile with
+#   glib-compile-resources.
 #
-# WHY internal resource prefix preserved
+# WHY the internal resource prefix is preserved
 #   The gresource entries are namespaced /com/ubuntu/themes/Yaru-magenta-
-#   dark/{3.0,4.0}/... and remain so after our recompile — we do NOT
+#   dark/{3.0,4.0}/... and remain so after our recompile — we do not
 #   rename to /com/aiobi/themes/Aiobi/. The CSS inside the bundle refers
 #   to its own assets via relative resource URIs; renaming the prefix
 #   would break every @import inside the bundle. GTK loads a gresource
-#   by its FILE PATH (/usr/share/themes/Aiobi/gtk-{3,4}.0/gtk.gresource)
+#   by its file path (/usr/share/themes/Aiobi/gtk-{3,4}.0/gtk.gresource)
 #   and the internal prefix is a private detail of that file.
 #
 # REFERENCES
-#   - Log 5 §2.4 (Bug A architecture correction, full-clone approach)
-#   - Log 5 §2.5 (gresource extract/sed/recompile pipeline)
-#   - Log 5 §4.1 (overlay-vs-full-theme lesson)
-#   - Log 5 §4.2 (gresource pattern generalisation from Day 3 §2.0.2)
-#   - Yaru accent-colors.scss.in: #B34CB3 magenta primary
+#   - Yaru upstream palette: accent-colors.scss.in (#B34CB3 magenta primary)
+#   - freedesktop.org GResource specification
 #
 # IDEMPOTENT: backup on first run + restore before every re-apply.
 # =============================================================================
@@ -54,7 +52,7 @@ set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: must run as root (sudo)"; exit 1; }
 
-echo "==> Aïobi US-1.4 / 03-inject-theme.sh (V2 Day 5)"
+echo "==> Aïobi — 03-inject-theme.sh"
 
 SRC_VARIANT=Yaru-magenta-dark
 YARU_ROOT="/usr/share/themes/${SRC_VARIANT}"
@@ -85,9 +83,9 @@ fi
 
 # ----- 2) Backup previous Aïobi theme (idempotent restore path) --------------
 if [ -d "$AIOBI_ROOT" ]; then
-    if [ ! -d "${AIOBI_ROOT}.day5.bak" ]; then
-        cp -r "$AIOBI_ROOT" "${AIOBI_ROOT}.day5.bak"
-        echo "  backup → ${AIOBI_ROOT}.day5.bak"
+    if [ ! -d "${AIOBI_ROOT}.aiobi.bak" ]; then
+        cp -r "$AIOBI_ROOT" "${AIOBI_ROOT}.aiobi.bak"
+        echo "  backup → ${AIOBI_ROOT}.aiobi.bak"
     fi
     rm -rf "$AIOBI_ROOT"
 fi
@@ -114,7 +112,7 @@ for tree in "$AIOBI_ROOT/gtk-3.0" "$AIOBI_ROOT/gtk-4.0"; do
 done
 echo "  sed applied to on-disk CSS/SVG"
 
-# ----- 5) Gresource extract → sed → recompile (Day 3 §2.0.2 pattern) --------
+# ----- 5) Gresource extract → sed → recompile ------------------------------
 process_gresource() {
     local version_dir="$1"    # /usr/share/themes/Aiobi/gtk-3.0 or gtk-4.0
     local gres_path="${version_dir}/gtk.gresource"
@@ -184,7 +182,7 @@ echo "== Verification =="
 ls -la "$AIOBI_ROOT/" 2>/dev/null | grep -E "gtk-|index"
 echo
 echo "  Disk CSS magenta remnants: $(grep -rc '#B34CB3' "$AIOBI_ROOT/gtk-3.0" "$AIOBI_ROOT/gtk-4.0" 2>/dev/null | grep -v ':0$' | wc -l) files"
-echo "  Backups: $(ls "$AIOBI_ROOT.day5.bak" 2>/dev/null && echo yes) + gresource *.magenta.bak"
+echo "  Backups: $(ls "$AIOBI_ROOT.aiobi.bak" 2>/dev/null && echo yes) + gresource *.magenta.bak"
 
-echo "==> 03 done (V2 Day 5 full-clone + gresource pipeline)"
+echo "==> 03 done (full-clone + gresource pipeline)"
 echo "    Effect: GTK 3+4 apps carry Aïobi violet accent + all Yaru widget completeness."
