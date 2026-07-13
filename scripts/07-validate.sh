@@ -86,15 +86,20 @@ for f in gtk-3.0/gtk.css gtk-3.0/gtk-dark.css gtk-4.0/gtk.css index.theme; do
                           || nope "theme file missing: $f"
 done
 
-# GTK4 dark mode tokens
-grep -q "prefers-color-scheme: dark" "$THEME_DIR/gtk-4.0/gtk.css" 2>/dev/null \
-    && ok "GTK4 @media prefers-color-scheme: dark present" \
-    || nope "GTK4 dark mode media query missing"
+# Accent colour baked into the theme.
+# The full-clone theme derivation (script 03) sed-substitutes the Yaru
+# magenta hex into the Aïobi violet directly in every CSS file rather
+# than shipping an @media (prefers-color-scheme: dark) overlay. We
+# therefore verify the presence of the accent colour in the main
+# gtk.css of each version. gtk-dark.css may or may not carry the token
+# depending on the upstream Yaru variant's file structure.
+grep -qi "#7233CD" "$THEME_DIR/gtk-3.0/gtk.css" 2>/dev/null \
+    && ok "GTK3 gtk.css contains Aïobi violet accent" \
+    || nope "GTK3 gtk.css missing accent token"
 
-# GTK3 dark file has accent definition
-grep -q "#7233CD" "$THEME_DIR/gtk-3.0/gtk-dark.css" 2>/dev/null \
-    && ok "GTK3 gtk-dark.css contains Aïobi violet" \
-    || nope "GTK3 gtk-dark.css missing accent token"
+grep -qi "#7233CD" "$THEME_DIR/gtk-4.0/gtk.css" 2>/dev/null \
+    && ok "GTK4 gtk.css contains Aïobi violet accent" \
+    || nope "GTK4 gtk.css missing accent token"
 
 # gtk-theme applied — dconf live OR keyfile
 gtk_theme=$(dconf_or_keyfile /org/gnome/desktop/interface/gtk-theme "$BRAND_KEYFILE" "gtk-theme")
@@ -166,9 +171,15 @@ grep -q "^PRETTY_NAME=" /etc/os-release && grep -q "$PROBE" /etc/os-release \
     && ok "/etc/os-release PRETTY_NAME contains Aïobi" \
     || nope "/etc/os-release not rebranded"
 
-grep -q "$PROBE" /etc/lsb-release \
-    && ok "/etc/lsb-release rebranded" \
-    || nope "/etc/lsb-release not rebranded"
+if grep -q "$PROBE" /etc/lsb-release 2>/dev/null; then
+    ok "/etc/lsb-release rebranded"
+else
+    nope "/etc/lsb-release not rebranded"
+    # Diagnostic: dump the current file so the failure mode is unambiguous
+    echo "         current /etc/lsb-release content:"
+    sed 's/^/           | /' /etc/lsb-release 2>/dev/null || \
+        echo "           | (file missing or unreadable)"
+fi
 
 # ----- dconf profile + locks -------------------------------------------------
 [ -f /etc/dconf/profile/user ] \
