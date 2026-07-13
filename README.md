@@ -11,10 +11,10 @@ Aïobi OS* (RN Yanis Axel DABO, Burkina Institute of Technology).
 
 ## What this repository is
 
-- **15 idempotent shell scripts** that apply the five customization
+- **19 idempotent shell scripts** that apply the six customization
   layers (system identity, visual identity, shell composition,
-  application inventory, persistence & lockdown) plus a validation
-  script and an all-in-one orchestrator.
+  application inventory, AI layer, persistence & lockdown) plus a
+  validation script and an all-in-one orchestrator.
 - **`dconf` keyfiles and profile** that enforce brand defaults at the
   system level while preserving user freedom on non-negotiable keys
   (colour scheme, wallpaper, accent).
@@ -50,7 +50,11 @@ aiobi-os-core/
 │   ├── 11-apt-brand-alias.sh       # /etc/hosts + DEB822 mirror alias
 │   ├── 12-wine-proton-install.sh   # Wine 9.0 + GE-Proton + MIME handlers
 │   ├── 13-productivity-stack.sh    # OnlyOffice + Brave + VLC + Flameshot + Flatpaks
-│   └── 14-run-all.sh               # orchestrator (chains 01–13 + 07)
+│   ├── 14-run-all.sh               # orchestrator (chains all steps + 07)
+│   ├── 15-install-ollama.sh        # Ollama daemon + Qwen 2.5 models (loopback)
+│   ├── 17-install-ai-cli.sh        # aiobi-ai Python CLI + Bash/Zsh integration
+│   ├── 18-install-anythingllm.sh   # AnythingLLM AppImage + skel default config
+│   └── 19-tune-ram.sh              # zRAM (zstd) + Ollama socket activation
 ├── config/
 │   ├── dconf-profile               # /etc/dconf/profile/user
 │   ├── aiobi-panel.dconf           # /etc/dconf/db/local.d/20-aiobi-panel
@@ -86,6 +90,10 @@ bash scripts/10-snap-final-purge.sh
 bash scripts/11-apt-brand-alias.sh
 bash scripts/12-wine-proton-install.sh
 bash scripts/13-productivity-stack.sh
+bash scripts/15-install-ollama.sh
+bash scripts/17-install-ai-cli.sh
+bash scripts/18-install-anythingllm.sh
+bash scripts/19-tune-ram.sh
 bash scripts/06-apply-persistence.sh
 bash scripts/07-validate.sh
 ```

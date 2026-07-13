@@ -19,6 +19,10 @@
 #   11 apt-brand-alias       mirror.aiobi.local (DEB822 + /etc/hosts)
 #   12 wine-proton-install   Wine + GE-Proton + MIME associations
 #   13 productivity-stack    OnlyOffice + Brave + VLC + Flameshot + Flatpaks
+#   15 install-ollama        Ollama daemon + Qwen 2.5 models (loopback)
+#   17 install-ai-cli        aiobi-ai CLI + Bash/Zsh integration
+#   18 install-anythingllm   AnythingLLM AppImage + skel default config
+#   19 tune-ram              zRAM swap + Ollama socket activation
 #   06 apply-persistence     dconf locks + skel + fonts — LAST (seals state)
 #   07 validate              PASS/FAIL check against acceptance criteria
 #
@@ -76,6 +80,12 @@ run_step 11-apt-brand-alias.sh
 # Interoperability + productivity applications
 run_step 12-wine-proton-install.sh
 run_step 13-productivity-stack.sh
+
+# AI layer — Ollama daemon, CLI, GUI, memory tuning
+run_step 15-install-ollama.sh
+run_step 17-install-ai-cli.sh
+run_step 18-install-anythingllm.sh
+run_step 19-tune-ram.sh
 
 # Persistence LAST — seals dconf state, /etc/skel populated
 run_step 06-apply-persistence.sh
