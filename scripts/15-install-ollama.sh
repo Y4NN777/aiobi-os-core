@@ -79,10 +79,27 @@ install -d -o ollama -g ollama -m 0755 "$MODELS_DIR" 2>/dev/null || \
 # firstboot service registered below. We detect the mode via `systemctl
 # is-active`.
 
-if systemctl is-active --quiet ollama.service 2>/dev/null; then
-    echo "  daemon is active — pulling models now"
+# Wait for the daemon to be fully bound on 127.0.0.1:11434 before pulling.
+# systemctl is-active returns success on both "active" and "activating";
+# the API endpoint being reachable is the only reliable readiness signal.
+wait_for_ollama() {
+    local deadline=$(( $(date +%s) + 60 ))
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        if curl -sf --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+if systemctl is-active --quiet ollama.service 2>/dev/null && wait_for_ollama; then
+    echo "  daemon is ready — pulling models now"
     sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen2.5:1.5b       || echo "    ⚠ qwen2.5:1.5b pull failed"
     sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen2.5-coder:0.5b || echo "    ⚠ qwen2.5-coder:0.5b pull failed"
+elif systemctl is-active --quiet ollama.service 2>/dev/null; then
+    echo "  daemon is active but did not become reachable within 60s"
+    echo "  → re-run this script or invoke 'ollama pull qwen2.5:1.5b' manually once the daemon is ready"
 else
     echo "  daemon not active (chroot mode) — registering first-boot pull service"
 
