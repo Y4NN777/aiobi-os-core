@@ -65,11 +65,35 @@ apt-get install -y vlc flameshot
 apt-get install -y flatpak
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
+# Flatpak resilience helper: Flathub CDN throughput is variable; a single
+# `flatpak install` can stall to sub-100 kB/s under load. We wrap the
+# install in a retry loop (3 attempts) that on each failure marks any
+# partial download for repair via `flatpak repair` before retrying. A
+# soft failure of Flatpak apps is not fatal for the pipeline — the base
+# system remains functional; the missing apps are logged for later.
+flatpak_install_with_retry() {
+    local remote="$1"
+    local app="$2"
+    local attempt
+    for attempt in 1 2 3; do
+        echo "  flatpak install attempt $attempt: $app"
+        if timeout 900 flatpak install -y --noninteractive "$remote" "$app"; then
+            return 0
+        fi
+        echo "  attempt $attempt failed (timeout or fetch error) — repairing before retry"
+        flatpak repair --system 2>/dev/null || true
+        sleep 5
+    done
+    echo "  ⚠ giving up on $app after 3 attempts (Flathub CDN unreachable or too slow)"
+    echo "    the missing app can be installed later with: flatpak install flathub $app"
+    return 1
+}
+
 # --- 5. PeaZip (Flatpak) ----------------------------------------------------
-flatpak install -y flathub io.github.peazip.PeaZip
+flatpak_install_with_retry flathub io.github.peazip.PeaZip || true
 
 # --- 6. AppFlowy (Flatpak) --------------------------------------------------
-flatpak install -y flathub io.appflowy.AppFlowy
+flatpak_install_with_retry flathub io.appflowy.AppFlowy || true
 
 # --- 7. Verification --------------------------------------------------------
 echo "== Verification =="
