@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Aïobi placeholder — Sprint 1. Kaleb replaces in Sprint 2. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="0" y="0" width="256" height="256" rx="77" ry="77" fill="#7233CD"/>
+  <path d="M128 52 L196 80 V132 Q196 180 128 212 Q60 180 60 132 V80 Z"
+        fill="#FFFFFF"/>
+  <path d="M96 130 L120 154 L164 108"
+        fill="none" stroke="#7233CD" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

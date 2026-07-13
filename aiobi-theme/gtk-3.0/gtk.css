@@ -1,0 +1,81 @@
+/* =============================================================================
+ * Aïobi OS — GTK3 LIGHT theme overlay
+ * Inherits from Adwaita (default GTK3 base) and overlays Aïobi accent #7233CD.
+ *
+ * Why an overlay, not a full theme:
+ *   Maintaining a full GTK3 theme tree (>3k lines of CSS) is unsustainable for
+ *   a thesis MVP. We override only the variables the user sees as "accent":
+ *   selection, focus ring, buttons, links. The rest stays Adwaita-light for
+ *   widget correctness across the GNOME 46 app suite.
+ *
+ * Sources:
+ *   - libadwaita named colors:
+ *     https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/styles-and-appearance.html
+ *   - GTK 4 CSS properties (also valid in GTK3 for @define-color):
+ *     https://docs.gtk.org/gtk4/css-properties.html
+ *   - Adwaita GTK3 source (named colors compatibility):
+ *     https://gitlab.gnome.org/GNOME/gtk/-/blob/gtk-3-24/gtk/theme/Adwaita/_colors.scss
+ * ============================================================================= */
+
+/* ---- Aïobi accent tokens (light mode) ---- */
+@define-color aio_violet        #7233CD;
+@define-color aio_violet_700    #5C24A8;
+@define-color aio_violet_300    #B593E4;
+@define-color aio_violet_100    #EDE2FA;
+@define-color aio_white         #FFFFFF;
+@define-color aio_black         #000000;
+
+/* ---- Override Adwaita-named colors so vanilla widgets pick the accent ---- */
+@define-color theme_selected_bg_color      @aio_violet;
+@define-color theme_selected_fg_color      @aio_white;
+@define-color accent_color                 @aio_violet;
+@define-color accent_bg_color              @aio_violet;
+@define-color accent_fg_color              @aio_white;
+@define-color suggested_action_bg_color    @aio_violet;
+@define-color suggested_action_fg_color    @aio_white;
+
+/* ---- Pill buttons (Aïobi design rule: --radius-pill = 999px) ---- */
+button.suggested-action,
+button.default {
+    background-image: none;
+    background-color: @aio_violet;
+    color: @aio_white;
+    border-radius: 999px;
+    border-color: @aio_violet_700;
+    padding: 6px 16px;
+}
+button.suggested-action:hover,
+button.default:hover {
+    background-color: @aio_violet_300;
+}
+button.suggested-action:active,
+button.default:active {
+    background-color: @aio_violet_700;
+}
+
+/* ---- Focus ring (Aïobi: 0 0 0 3px rgba(114,51,205,0.35)) ---- */
+*:focus {
+    outline: 3px solid rgba(114, 51, 205, 0.35);
+    outline-offset: 1px;
+}
+
+/* ---- Selection (text, lists, treeviews) ---- */
+selection,
+*:selected {
+    background-color: @aio_violet;
+    color: @aio_white;
+}
+
+/* ---- Links ---- */
+*:link              { color: @aio_violet; }
+*:link:hover        { color: @aio_violet_300; }
+*:link:active       { color: @aio_violet_700; }
+
+/* ---- Switches, checks, radios — accent state ---- */
+switch:checked        { background-color: @aio_violet; }
+check:checked,
+radio:checked         { background-color: @aio_violet; color: @aio_white; }
+
+/* ---- Progress / scale highlights ---- */
+progressbar progress { background-color: @aio_violet; }
+scale highlight      { background-color: @aio_violet; }

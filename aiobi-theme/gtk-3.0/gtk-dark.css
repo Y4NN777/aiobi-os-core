@@ -1,0 +1,83 @@
+/* =============================================================================
+ * Aïobi OS — GTK3 DARK theme overlay
+ *
+ * GTK3 auto-loads gtk-dark.css when the user toggles dark mode (gsettings
+ * org.gnome.desktop.interface color-scheme = 'prefer-dark'). Both files MUST
+ * exist — shipping only gtk.css means dark mode falls back to Adwaita default
+ * accent (blue), breaking brand on ~50% of user sessions.
+ *
+ * Dark-mode token shifts (vs. light):
+ *   - bg becomes #1e1e1e, fg becomes #FFFFFF
+ *   - accent shifts from #7233CD → #B593E4 for state highlights where the
+ *     deeper violet would be unreadable on dark bg, BUT buttons keep
+ *     #7233CD bg with white text (violet has sufficient contrast vs #1e1e1e).
+ *
+ * Sources:
+ *   - GTK3 dark variant loading: https://docs.gtk.org/gtk3/class.Settings.html
+ *     (gtk-application-prefer-dark-theme + gtk-dark.css convention)
+ * ============================================================================= */
+
+/* ---- Aïobi accent tokens (dark mode — readability-shifted) ---- */
+@define-color aio_violet        #7233CD;
+@define-color aio_violet_700    #5C24A8;
+@define-color aio_violet_300    #B593E4;
+@define-color aio_violet_100    rgba(114, 51, 205, 0.20);
+@define-color aio_white         #FFFFFF;
+@define-color aio_bg_dark       #1e1e1e;
+
+/* ---- Override Adwaita named colors for dark mode ---- */
+@define-color theme_selected_bg_color      @aio_violet;
+@define-color theme_selected_fg_color      @aio_white;
+@define-color accent_color                 @aio_violet_300;   /* readable on dark */
+@define-color accent_bg_color              @aio_violet;       /* button bg stays brand */
+@define-color accent_fg_color              @aio_white;
+@define-color suggested_action_bg_color    @aio_violet;
+@define-color suggested_action_fg_color    @aio_white;
+
+/* ---- Pill buttons — same shape, dark-mode hover shifts to violet-300 ---- */
+button.suggested-action,
+button.default {
+    background-image: none;
+    background-color: @aio_violet;
+    color: @aio_white;
+    border-radius: 999px;
+    border-color: @aio_violet_700;
+    padding: 6px 16px;
+}
+button.suggested-action:hover,
+button.default:hover {
+    background-color: @aio_violet_300;
+    color: #000000;
+}
+button.suggested-action:active,
+button.default:active {
+    background-color: @aio_violet_700;
+    color: @aio_white;
+}
+
+/* ---- Focus ring — slightly brighter on dark for visibility ---- */
+*:focus {
+    outline: 3px solid rgba(181, 147, 228, 0.45);
+    outline-offset: 1px;
+}
+
+/* ---- Selection ---- */
+selection,
+*:selected {
+    background-color: @aio_violet;
+    color: @aio_white;
+}
+
+/* ---- Links — violet-300 on dark for contrast ---- */
+*:link              { color: @aio_violet_300; }
+*:link:hover        { color: @aio_violet; }
+*:link:active       { color: @aio_violet_700; }
+
+/* ---- Switches, checks, radios ---- */
+switch:checked        { background-color: @aio_violet; }
+check:checked,
+radio:checked         { background-color: @aio_violet; color: @aio_white; }
+
+/* ---- Progress / scale highlights ---- */
+progressbar progress { background-color: @aio_violet_300; }
+scale highlight      { background-color: @aio_violet_300; }

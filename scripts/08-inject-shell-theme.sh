@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# ============================================================================
+# Aïobi OS — US-1.4 polish Day 5 — inject Aïobi gnome-shell theme
+# ----------------------------------------------------------------------------
+# Purpose : ship a gnome-shell theme "Aiobi" cloned from Yaru-magenta-dark with
+#           the primary magenta hex #B34CB3 sed-replaced by Aïobi violet #7233CD.
+#           Installed at /usr/share/themes/Aiobi/gnome-shell/, activated via the
+#           user-theme extension (gnome-shell-extensions package).
+#
+# Solves  : Bug B (Log 5 §2.6) — Day 4 shipped user-theme.name='' (empty),
+#           so the GNOME Shell top bar (calendar dropdown, Activities search,
+#           Quick Settings) fell back to Yaru default. Additionally the
+#           `gnome-shell-extensions` metapackage that provides the `user-theme`
+#           extension was not installed on the Day 4 ISO.
+#
+# References :
+#   - Log 5 §2.6 (this fix documented step-by-step)
+#   - Yaru upstream common/accent-colors.scss.in — magenta primary #B34CB3
+#     https://github.com/ubuntu/yaru/blob/master/common/accent-colors.scss.in
+#
+# Idempotent: re-running restores from backup and re-applies sed cleanly.
+#
+# Ordering: run AFTER 01-install-extensions.sh (which installs dash-to-panel
+# so user-theme can co-exist) but BEFORE 06-apply-persistence.sh (which locks
+# the theme name in system dconf). Typical order: 01 → 08 → 06.
+# ============================================================================
+
+set -euo pipefail
+
+[[ $EUID -eq 0 ]] || { echo "Must run as root (sudo)."; exit 1; }
+
+SRC="/usr/share/themes/Yaru-magenta-dark/gnome-shell"
+DST="/usr/share/themes/Aiobi/gnome-shell"
+STAGING="/tmp/aiobi-shell-src"
+
+# --- 1. Sanity check the Yaru variant is installed ---------------------------
+if [[ ! -d "$SRC" ]]; then
+    echo "ERROR: $SRC not found. Install yaru-theme-gnome-shell first:"
+    echo "  apt-get install -y yaru-theme-gnome-shell"
+    exit 2
+fi
+
+# --- 2. Install the user-theme extension (may be no-op if already there) -----
+apt-get install -y gnome-shell-extensions
+
+# --- 3. Enable it for the invoking user (idempotent — enable is safe if on) ---
+# Only run gnome-extensions if a graphical session is live (chroot mode has no
+# session — enablement then happens at first user login via dconf lock in
+# 06-apply-persistence.sh).
+if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || [[ -d "/run/user/${SUDO_UID:-$EUID}/dconf" ]]; then
+    # Extract user for gnome-extensions call
+    RUN_USER="${SUDO_USER:-$(logname 2>/dev/null || echo root)}"
+    su - "$RUN_USER" -c \
+        "gnome-extensions enable user-theme@gnome-shell-extensions.gcampax.github.com" \
+        2>/dev/null || echo "note: gnome-extensions enable deferred (no live session)"
+fi
+
+# --- 4. Stage a clone of the Yaru shell theme --------------------------------
+rm -rf "$STAGING"
+cp -r "$SRC" "$STAGING"
+
+# --- 5. Sed the primary Yaru magenta family into Aïobi violet family ---------
+# Yaru magenta primary: #B34CB3 (from Yaru accent-colors.scss.in optimize-contrast base)
+# Aïobi violet primary: #7233CD
+# The rgb() and rgba() forms may also appear in the compiled CSS.
+sed -i \
+    -e 's/#B34CB3/#7233CD/gI' \
+    -e 's/rgb(179,\s*76,\s*179)/rgb(114, 51, 205)/g' \
+    -e 's/rgba(179,\s*76,\s*179/rgba(114, 51, 205/g' \
+    "$STAGING/gnome-shell.css"
+
+# --- 6. Backup existing Aïobi shell theme dir (idempotent restore path) ------
+if [[ -d "$DST" && ! -d "${DST}.aiobi.bak" ]]; then
+    cp -r "$DST" "${DST}.aiobi.bak"
+fi
+
+# --- 7. Install --------------------------------------------------------------
+mkdir -p "$(dirname "$DST")"
+rm -rf "$DST"
+cp -r "$STAGING" "$DST"
+
+# --- 8. Point the user-theme dconf key at Aiobi (system-default, unlocked) ---
+# Note: /etc/dconf/db/local.d/00-aiobi-branding + dconf update happens in
+# 06-apply-persistence.sh. Here we only write the runtime value if a session
+# exists — otherwise the persistence script does it at compile time.
+if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+    dconf write /org/gnome/shell/extensions/user-theme/name "'Aiobi'" \
+        2>/dev/null || true
+fi
+
+# --- 9. Verification ---------------------------------------------------------
+echo "== Verification =="
+ls -la "$DST/gnome-shell.css"
+echo "  magenta remnants in Aïobi shell CSS:  $(grep -c '#B34CB3' "$DST/gnome-shell.css" || echo 0)"
+echo "  Aïobi violet in Aïobi shell CSS:      $(grep -c '#7233CD' "$DST/gnome-shell.css" || echo 0)"
+
+# Cleanup staging (backup at ${DST}.aiobi.bak is preserved)
+rm -rf "$STAGING"
+
+echo "== 08-inject-shell-theme.sh done =="
+echo "Requires GNOME session logout+login to take effect on the running system."

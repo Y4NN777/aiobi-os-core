@@ -1,0 +1,93 @@
+/* =============================================================================
+ * Aïobi OS — GTK4 / libadwaita theme overlay (LIGHT + DARK)
+ *
+ * libadwaita does NOT load themes the way GTK3 does — it ships its own
+ * Adwaita base and only allows OVERRIDE of named colors via @define-color
+ * in /usr/share/themes/<Name>/gtk-4.0/gtk.css (system) or ~/.config/gtk-4.0/
+ * (user). Custom widget CSS is allowed but discouraged (breaks app intent).
+ *
+ * Dark mode handling:
+ *   libadwaita switches between AdwStyleManager light/dark internally based
+ *   on org.gnome.desktop.interface color-scheme. The standard escape hatch
+ *   is `@media (prefers-color-scheme: dark)` inside gtk.css — libadwaita
+ *   honours this media query [GNOME blog: alicem 2021-12-31, Libadwaita 1.0].
+ *
+ * Sources:
+ *   - libadwaita styles-and-appearance:
+ *     https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/styles-and-appearance.html
+ *   - libadwaita 1.0 blog (accent override pattern):
+ *     https://blogs.gnome.org/alicem/2021/12/31/libadwaita-1-0/
+ *   - FOSTips libadwaita theming guide:
+ *     https://fostips.com/customize-gtk4-app-window-colors/
+ * ============================================================================= */
+
+/* ============================================================ LIGHT (default) */
+@define-color aio_violet        #7233CD;
+@define-color aio_violet_700    #5C24A8;
+@define-color aio_violet_300    #B593E4;
+@define-color aio_violet_100    #EDE2FA;
+@define-color aio_white         #FFFFFF;
+@define-color aio_black         #000000;
+
+/* libadwaita accent override — these 3 are the canonical entry points */
+@define-color accent_color      @aio_violet;
+@define-color accent_bg_color   @aio_violet;
+@define-color accent_fg_color   @aio_white;
+
+/* Other libadwaita named colors that reference accent indirectly */
+@define-color theme_selected_bg_color   @aio_violet;
+@define-color theme_selected_fg_color   @aio_white;
+
+/* Pill suggested-action button (Aïobi design rule) */
+button.suggested-action {
+    border-radius: 999px;
+    padding: 6px 18px;
+}
+button.suggested-action,
+button.suggested-action:hover,
+button.suggested-action:active {
+    background-image: none;
+}
+button.suggested-action            { background-color: @aio_violet;     color: @aio_white; }
+button.suggested-action:hover      { background-color: @aio_violet_300; color: @aio_black; }
+button.suggested-action:active     { background-color: @aio_violet_700; color: @aio_white; }
+
+/* Focus ring */
+*:focus-visible {
+    outline: 3px solid alpha(@aio_violet, 0.35);
+    outline-offset: 1px;
+}
+
+/* Links */
+*:link          { color: @aio_violet; }
+*:link:hover    { color: @aio_violet_300; }
+*:link:active   { color: @aio_violet_700; }
+
+/* ============================================================ DARK overrides */
+@media (prefers-color-scheme: dark) {
+    /* Re-bind named colors for dark mode. libadwaita reads @define-color
+     * declarations inside @media — confirmed working on GTK 4.14+ /
+     * libadwaita 1.5 shipped with Ubuntu 24.04. */
+    @define-color aio_violet_100   alpha(#7233CD, 0.20);
+
+    @define-color accent_color     @aio_violet_300;   /* readable on dark bg */
+    @define-color accent_bg_color  @aio_violet;       /* button bg stays brand */
+    @define-color accent_fg_color  @aio_white;
+
+    @define-color theme_selected_bg_color   @aio_violet;
+    @define-color theme_selected_fg_color   @aio_white;
+
+    /* Dark-mode focus ring — brighter so it survives on #1e1e1e */
+    *:focus-visible {
+        outline: 3px solid alpha(@aio_violet_300, 0.45);
+        outline-offset: 1px;
+    }
+
+    /* Dark-mode link palette — invert hover/normal for contrast */
+    *:link          { color: @aio_violet_300; }
+    *:link:hover    { color: @aio_violet; }
+    *:link:active   { color: @aio_violet_700; }
+
+    /* Dark-mode pill button — hover with dark text on light violet */
+    button.suggested-action:hover    { background-color: @aio_violet_300; color: @aio_black; }
+}

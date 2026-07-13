@@ -1,0 +1,51 @@
+# Aïobi OS — dash-to-panel system-wide defaults
+# Installed at /etc/dconf/db/local.d/20-aiobi-panel
+#
+# Schema source: https://github.com/home-sweet-gnome/dash-to-panel/blob/master/schemas/org.gnome.shell.extensions.dash-to-panel.gschema.xml
+# Defaults verified 2026-05 against master branch (GNOME 46 supported).
+#
+# Per-monitor JSON keys (panel-positions, panel-sizes, panel-lengths,
+# panel-anchors, panel-element-positions) default to '{}'. Aïobi sets the
+# "0" key — the primary monitor — to BOTTOM, 48px, full width, MIDDLE
+# anchor. Additional monitors inherit dash-to-panel's per-monitor fallback
+# (mirrors primary).
+
+[org/gnome/shell/extensions/dash-to-panel]
+panel-positions='{"0":"BOTTOM"}'
+panel-sizes='{"0":48}'
+panel-lengths='{"0":100}'
+panel-anchors='{"0":"MIDDLE"}'
+# Element layout: from left to right —
+#   show-apps-btn | activities | left box | taskbar (running apps) | tray | date | system menu | desktop-btn
+panel-element-positions='{"0":[{"element":"showAppsButton","visible":true,"position":"stackedTL"},{"element":"activitiesButton","visible":false,"position":"stackedTL"},{"element":"leftBox","visible":true,"position":"stackedTL"},{"element":"taskbar","visible":true,"position":"stackedTL"},{"element":"centerBox","visible":true,"position":"stackedBR"},{"element":"rightBox","visible":true,"position":"stackedBR"},{"element":"dateMenu","visible":true,"position":"stackedBR"},{"element":"systemMenu","visible":true,"position":"stackedBR"},{"element":"desktopButton","visible":true,"position":"stackedBR"}]}'
+
+# Visual — Aïobi brand violet panel background
+trans-use-custom-bg=true
+trans-bg-color='#7233CD'
+trans-use-custom-opacity=true
+trans-panel-opacity=1.0
+
+# Behaviour — taskbar look closer to Windows
+appicon-margin=6
+appicon-padding=4
+dot-style-focused='METRO'
+dot-style-unfocused='DOTS'
+show-favorites=true
+isolate-workspaces=false
+isolate-monitors=false
+
+# Intellihide — DISABLED (Bug C Day 5). Root cause: user right-click "Lock
+# taskbar" toggles `taskbar-locked` which controls EDIT permission, NOT
+# visibility. UX-trap resolved by shipping intellihide=false as default —
+# panel always visible, no ambiguity. Users can opt back in via right-click.
+# See Log 5 §2.2.
+intellihide=false
+intellihide-behaviour='ALL_WINDOWS'
+
+# Hotkeys: Super+number launches the Nth pinned app (Windows-like)
+hotkeys-overlay-combo='TEMPORARILY'
+
+[org/gnome/shell]
+# Enable dash-to-panel + user-theme + disable Ubuntu's own dock
+enabled-extensions=['dash-to-panel@jderose9.github.com', 'user-theme@gnome-shell-extensions.gcampax.github.com']
+disabled-extensions=['ubuntu-dock@ubuntu.com']

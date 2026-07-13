@@ -1,0 +1,12 @@
+# Aïobi OS — system-wide dconf user profile
+# Installed at /etc/dconf/profile/user
+#
+# Stack semantics: the "user" db sits ON TOP of the "local" system db.
+# Aïobi defaults live in /etc/dconf/db/local.d/ and are picked up at login.
+# Locks live in /etc/dconf/db/local.d/locks/ — listed keys cannot be changed
+# even by the user, but UNLOCKED defaults remain user-overridable (free
+# light/dark toggle, free wallpaper swap).
+#
+# Source: https://help.gnome.org/admin/system-admin-guide/stable/dconf-profiles.html
+user-db:user
+system-db:local

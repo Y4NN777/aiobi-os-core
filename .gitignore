@@ -1,0 +1,26 @@
+# Backups produced by the scripts on modified system files
+*.bak
+*.aiobi.bak
+*.magenta.bak
+*.day5.bak
+*.sprint1.bak
+
+# Working / transient directories used inside the chroot
+/tmp/aiobi-*/
+/var/log/aiobi-*.log
+
+# Editor artefacts
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# Python bytecode (in case validation scripts are extended)
+__pycache__/
+*.pyc
+
+# Local secrets (not expected but safeguarded)
+*.env
+.env.*
+!.env.example
