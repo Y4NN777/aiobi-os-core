@@ -64,6 +64,34 @@ apt-get install -y gnome-shell-extensions fonts-inter fonts-jetbrains-mono || \
 [ -f "$BRANDING_SRC" ] || { echo "ERROR: $BRANDING_SRC missing"; exit 1; }
 [ -f "$PANEL_SRC" ]    || { echo "ERROR: $PANEL_SRC missing";    exit 1; }
 
+# ----- 0) Sweep foreign keyfiles ---------------------------------------------
+# Any keyfile in /etc/dconf/db/local.d/ that is NOT one of ours can override
+# our branding at compile time (dconf applies keyfiles in filename order;
+# a numerically higher prefix wins). This has been observed in practice
+# with a legacy 10-aiobi-accent-theme keyfile left over from an earlier
+# customization attempt that forced Yaru-magenta-dark and cancelled the
+# Aïobi theme deployment. We sweep unknown files here before installing
+# our own, so a re-run always converges on a clean state.
+KNOWN_KEYFILES=(
+    "00-aiobi-branding"
+    "00-aiobi-wallpaper"
+    "20-aiobi-panel"
+)
+if [ -d "$DCONF_LOCAL_D" ]; then
+    for existing in "$DCONF_LOCAL_D"/*; do
+        [ -f "$existing" ] || continue
+        base=$(basename "$existing")
+        known=false
+        for kf in "${KNOWN_KEYFILES[@]}"; do
+            [ "$base" = "$kf" ] && known=true && break
+        done
+        if ! $known; then
+            echo "  sweep: removing foreign keyfile $existing (would override Aïobi branding)"
+            rm -f "$existing"
+        fi
+    done
+fi
+
 # ----- 1) Profile -------------------------------------------------------------
 mkdir -p "$(dirname "$DCONF_PROFILE")"
 install -m 0644 "$PROFILE_SRC" "$DCONF_PROFILE"
