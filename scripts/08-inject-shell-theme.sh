@@ -30,19 +30,32 @@ set -euo pipefail
 
 [[ $EUID -eq 0 ]] || { echo "Must run as root (sudo)."; exit 1; }
 
-SRC="/usr/share/themes/Yaru-magenta-dark/gnome-shell"
+# On Ubuntu 24.04, yaru-theme-gnome-shell installs its variants under
+#   /usr/share/gnome-shell/theme/Yaru-*
+# rather than under /usr/share/themes/Yaru-*/gnome-shell/ as older
+# releases did. The user-theme GNOME Shell extension however loads
+# themes from /usr/share/themes/<Name>/gnome-shell/, so we clone from
+# the actual source location and install into the extension-lookup
+# location under the Aïobi name.
+SRC="/usr/share/gnome-shell/theme/Yaru-magenta-dark"
 DST="/usr/share/themes/Aiobi/gnome-shell"
 STAGING="/tmp/aiobi-shell-src"
 
-# --- 1. Sanity check the Yaru variant is installed ---------------------------
-if [[ ! -d "$SRC" ]]; then
-    echo "ERROR: $SRC not found. Install yaru-theme-gnome-shell first:"
-    echo "  apt-get install -y yaru-theme-gnome-shell"
+# --- 1. Ensure the required packages are installed --------------------------
+# yaru-theme-gnome-shell ships the Yaru-magenta-dark shell theme;
+# gnome-shell-extensions ships the user-theme extension that lets the
+# derived theme be selected via the /org/gnome/shell/extensions/user-theme/
+# dconf schema.
+export DEBIAN_FRONTEND=noninteractive
+apt-get install -y yaru-theme-gnome-shell gnome-shell-extensions
+
+# --- 2. Sanity check the Yaru variant is installed --------------------------
+if [[ ! -f "$SRC/gnome-shell.css" ]]; then
+    echo "ERROR: $SRC/gnome-shell.css not found even after apt install."
+    echo "  Expected location on Ubuntu 24.04: /usr/share/gnome-shell/theme/Yaru-magenta-dark/"
+    ls -la /usr/share/gnome-shell/theme/ 2>/dev/null | head -20
     exit 2
 fi
-
-# --- 2. Install the user-theme extension (may be no-op if already there) -----
-apt-get install -y gnome-shell-extensions
 
 # --- 3. Enable it for the invoking user (idempotent — enable is safe if on) ---
 # Only run gnome-extensions if a graphical session is live (chroot mode has no
