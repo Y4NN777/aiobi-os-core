@@ -237,6 +237,21 @@ fi
     && ok "/etc/skel symlinks Aiobi GTK4 theme" \
     || warn "/etc/skel GTK4 symlink missing (new users won't auto-inherit)"
 
+# ----- AI zero-data-leak firewall -------------------------------------------
+# The IPv4 and IPv6 iptables rules installed by 20-ai-firewall.sh must be
+# present on disk (persistence layer) and, when systemd is running, active
+# in the kernel netfilter chains.
+if [ -f /etc/iptables/rules.v4 ] && grep -q "dport 11434" /etc/iptables/rules.v4; then
+    ok "AI firewall IPv4 rule present at /etc/iptables/rules.v4"
+else
+    nope "AI firewall IPv4 rule missing"
+fi
+if [ -f /etc/iptables/rules.v6 ] && grep -q "dport 11434" /etc/iptables/rules.v6; then
+    ok "AI firewall IPv6 rule present at /etc/iptables/rules.v6"
+else
+    nope "AI firewall IPv6 rule missing"
+fi
+
 echo
 if [ $fail -eq 0 ]; then
     printf "${green}===== ALL CHECKS PASSED =====${reset}\n"

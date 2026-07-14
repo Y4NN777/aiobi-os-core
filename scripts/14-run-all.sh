@@ -85,6 +85,7 @@ run_step 15-install-ollama.sh
 run_step 17-install-aiobi-term.sh
 run_step 18-install-anythingllm.sh
 run_step 19-tune-ram.sh
+run_step 20-ai-firewall.sh
 
 # Persistence — dconf profile + keyfiles (branding, wallpaper, panel, terminal)
 # + locks + /etc/skel. This step installs every system dconf keyfile and
