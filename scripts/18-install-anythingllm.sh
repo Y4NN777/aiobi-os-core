@@ -46,35 +46,32 @@ MARKER="$INSTALL_DIR/.anythingllm-installed"
 
 mkdir -p "$INSTALL_DIR"
 
-# ----- 1) Download AppImage via upstream installer --------------------------
-# The upstream installer script downloads the latest AppImage into the
-# current working directory. We drive it from $INSTALL_DIR so the file
-# lands where we want.
+# ----- 1) Download AppImage directly (bypass installer.sh) ------------------
+# The upstream installer.sh refuses to run as root ("This script should not
+# be run as root"), which our chroot context (where every step runs as root)
+# cannot satisfy. We therefore fetch the AppImage from the same CDN the
+# installer targets, with architecture detection matching the upstream
+# script's own uname -m switch.
 if [ ! -f "$MARKER" ] || [ ! -x "$APP_PATH" ]; then
-    echo "  fetching AnythingLLM Desktop AppImage from upstream"
-    (
-        cd "$INSTALL_DIR"
-        curl -fsSL https://cdn.anythingllm.com/latest/installer.sh -o installer.sh
-        chmod +x installer.sh
-        # The installer prompts interactively for apparmor and other steps.
-        # In a chroot / non-interactive context we run it with `yes n` to
-        # decline the interactive prompts and just fetch the AppImage.
-        yes n | ./installer.sh || true
-    )
-
-    # Locate the resulting AppImage. Upstream may produce a versioned filename
-    # (e.g., AnythingLLMDesktop-1.8.5.AppImage); we normalize to a stable name.
-    APPIMAGE_FOUND=$(find "$INSTALL_DIR" -maxdepth 1 -iname "AnythingLLM*Desktop*.AppImage" -type f 2>/dev/null | head -1)
-    if [ -n "$APPIMAGE_FOUND" ] && [ "$APPIMAGE_FOUND" != "$APP_PATH" ]; then
-        mv "$APPIMAGE_FOUND" "$APP_PATH"
+    arch=$(uname -m)
+    case "$arch" in
+        arm64|aarch64) APPIMAGE_URL="https://cdn.anythingllm.com/latest/AnythingLLMDesktop-Arm64.AppImage" ;;
+        *)             APPIMAGE_URL="https://cdn.anythingllm.com/latest/AnythingLLMDesktop.AppImage"       ;;
+    esac
+    echo "  fetching $APPIMAGE_URL"
+    if curl -fL --retry 3 --retry-delay 5 -o "$APP_PATH" "$APPIMAGE_URL"; then
+        chmod 755 "$APP_PATH"
+        echo "  downloaded $APP_PATH ($(du -h "$APP_PATH" | awk '{print $1}'))"
+    else
+        rm -f "$APP_PATH"
+        echo "  ⚠ download failed — the AppImage is not shipped in this ISO"
+        echo "    the user can install it later with:"
+        echo "      curl -fL -o ~/AnythingLLMDesktop.AppImage $APPIMAGE_URL"
+        echo "      chmod +x ~/AnythingLLMDesktop.AppImage"
     fi
 
     if [ -x "$APP_PATH" ]; then
         touch "$MARKER"
-        echo "  installed $APP_PATH"
-    else
-        echo "  ⚠ AppImage not found after installer run — download may have failed"
-        echo "    (this can happen offline; the .desktop entry is still shipped)"
     fi
 else
     echo "  AnythingLLM already installed at $APP_PATH"
