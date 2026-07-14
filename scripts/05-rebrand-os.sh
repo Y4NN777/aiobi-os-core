@@ -180,6 +180,23 @@ EOF
     fi
 fi
 
+# ----- 9b) GNOME initial-setup Welcome popup kill --------------------------
+# /etc/xdg/autostart/gnome-initial-setup-first-login.desktop autostarts a
+# "Welcome to Ubuntu" (rebranded "Welcome to Aïobi OS" via PRETTY_NAME) popup
+# on the first user login. The popup carries Ubuntu Yaru illustration
+# assets (orange Yaru crown) that clash with the Aïobi identity. Disable
+# via Hidden=true — same survival-under-updates pattern as ubuntu-advantage.
+GIS_WELCOME=/etc/xdg/autostart/gnome-initial-setup-first-login.desktop
+if [ -f "$GIS_WELCOME" ]; then
+    if ! grep -q "^Hidden=true" "$GIS_WELCOME"; then
+        tee -a "$GIS_WELCOME" > /dev/null << 'EOF'
+Hidden=true
+X-GNOME-Autostart-enabled=false
+EOF
+        echo "  gnome-initial-setup-first-login popup disabled"
+    fi
+fi
+
 # ----- 10) First-boot systemd oneshot — PRETTY_NAME resilience --------------
 # The Cubic ISO builder overwrites the PRETTY_NAME field of /etc/os-release
 # at ISO generation time with a build-timestamp string. This service reverts
