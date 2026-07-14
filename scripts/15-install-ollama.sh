@@ -71,8 +71,14 @@ systemctl restart ollama.service 2>/dev/null || \
 # /usr/share/ollama/.ollama/models (system-wide, mkfs.squashfs-friendly).
 
 MODELS_DIR=/usr/share/ollama/.ollama/models
-install -d -o ollama -g ollama -m 0755 "$MODELS_DIR" 2>/dev/null || \
-    mkdir -p "$MODELS_DIR"
+# `install -d` sets ownership only on the final directory, not on
+# intermediates. The Ollama daemon runs as user `ollama` and writes
+# an SSH-signing keypair at $HOME/.ollama/id_ed25519 on first start;
+# if any parent directory is root-owned it dies with 'permission
+# denied' before binding. We chown the full HOME tree explicitly.
+mkdir -p "$MODELS_DIR"
+chown -R ollama:ollama /usr/share/ollama
+chmod -R u+rwX,g+rX,o+rX /usr/share/ollama
 
 # On a live system: pull via the running daemon.
 # In a chroot (no live daemon): the pull is deferred to first boot via the
