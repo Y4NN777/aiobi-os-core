@@ -2,48 +2,62 @@
 # Installed at /etc/dconf/db/local.d/20-aiobi-panel
 #
 # Schema source: https://github.com/home-sweet-gnome/dash-to-panel/blob/master/schemas/org.gnome.shell.extensions.dash-to-panel.gschema.xml
-# Defaults verified 2026-05 against master branch (GNOME 46 supported).
 #
-# Per-monitor JSON keys (panel-positions, panel-sizes, panel-lengths,
-# panel-anchors, panel-element-positions) default to '{}'. Aïobi sets the
-# "0" key — the primary monitor — to BOTTOM, 48px, full width, MIDDLE
-# anchor. Additional monitors inherit dash-to-panel's per-monitor fallback
-# (mirrors primary).
+# Panel appearance derived from the reference converged VM state:
+#   - Bottom position, 64px height (comfortable for touch + accessible)
+#   - Background Aïobi black #0F1010 with dynamic opacity (55%)
+#   - Intellihide enabled (dock retracts when a window overlaps it)
+#   - Show apps + taskbar left, system clock + system menu right
+#
+# Per-monitor JSON keys use the "0" (index) key as the generic default,
+# so any monitor UUID inherits these settings via dash-to-panel's
+# fallback logic.
 
 [org/gnome/shell/extensions/dash-to-panel]
+# Position + size
 panel-positions='{"0":"BOTTOM"}'
-panel-sizes='{"0":48}'
+panel-sizes='{"0":64}'
 panel-lengths='{"0":100}'
 panel-anchors='{"0":"MIDDLE"}'
-# Element layout: from left to right —
-#   show-apps-btn | activities | left box | taskbar (running apps) | tray | date | system menu | desktop-btn
+
+# Element layout: showApps left, taskbar center-left, system menu right
 panel-element-positions='{"0":[{"element":"showAppsButton","visible":true,"position":"stackedTL"},{"element":"activitiesButton","visible":false,"position":"stackedTL"},{"element":"leftBox","visible":true,"position":"stackedTL"},{"element":"taskbar","visible":true,"position":"stackedTL"},{"element":"centerBox","visible":true,"position":"stackedBR"},{"element":"rightBox","visible":true,"position":"stackedBR"},{"element":"dateMenu","visible":true,"position":"stackedBR"},{"element":"systemMenu","visible":true,"position":"stackedBR"},{"element":"desktopButton","visible":true,"position":"stackedBR"}]}'
 
-# Visual — Aïobi brand violet panel background
+# Visual — Aïobi black translucent with dynamic opacity
 trans-use-custom-bg=true
-trans-bg-color='#7233CD'
+trans-bg-color='#0F1010'
 trans-use-custom-opacity=true
-trans-panel-opacity=1.0
+trans-panel-opacity=0.55
+trans-use-dynamic-opacity=true
+trans-dynamic-anim-time=200
 
 # Behaviour — taskbar look closer to Windows
 appicon-margin=6
 appicon-padding=4
+dot-position='BOTTOM'
 dot-style-focused='METRO'
 dot-style-unfocused='DOTS'
 show-favorites=true
 isolate-workspaces=false
 isolate-monitors=false
+taskbar-locked=true
 
-# Intellihide — DISABLED (later iteration). Root cause: user right-click "Lock
-# taskbar" toggles `taskbar-locked` which controls EDIT permission, NOT
-# visibility. UX-trap resolved by shipping intellihide=false as default —
-# panel always visible, no ambiguity. Users can opt back in via right-click.
-# A user right-click "Lock the taskbar" toggle sets a separate flag (dash-to-panel-taskbar-locked); intellihide is the one that controls auto-hide behaviour.
-intellihide=false
+# Intellihide enabled — the dock retracts when a window overlaps it,
+# reappears when the pointer approaches the bottom edge. Matches the
+# converged reference VM behaviour.
+intellihide=true
 intellihide-behaviour='ALL_WINDOWS'
+intellihide-show-in-fullscreen=true
+intellihide-show-on-notification=true
 
 # Hotkeys: Super+number launches the Nth pinned app (Windows-like)
 hotkeys-overlay-combo='TEMPORARILY'
+
+# Window previews
+window-preview-title-position='TOP'
+
+# Animation
+animate-appicon-hover-animation-extent={'RIPPLE': 4, 'PLANK': 4, 'SIMPLE': 1}
 
 [org/gnome/shell]
 # Enable dash-to-panel + user-theme + disable Ubuntu's own dock

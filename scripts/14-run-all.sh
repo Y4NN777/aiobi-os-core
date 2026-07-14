@@ -71,9 +71,8 @@ run_step 03-inject-theme.sh
 run_step 04-install-icons.sh
 run_step 05-rebrand-os.sh
 
-# Polish phase — shell theme + terminal palette + snap purge + apt alias
+# Polish phase — shell theme + snap purge + apt alias
 run_step 08-inject-shell-theme.sh
-run_step 09-terminal-profile.sh
 run_step 10-snap-final-purge.sh
 run_step 11-apt-brand-alias.sh
 
@@ -87,10 +86,16 @@ run_step 17-install-ai-cli.sh
 run_step 18-install-anythingllm.sh
 run_step 19-tune-ram.sh
 
-# Persistence LAST — seals dconf state, /etc/skel populated
+# Persistence — dconf profile + keyfiles (branding, wallpaper, panel, terminal)
+# + locks + /etc/skel. This step installs every system dconf keyfile and
+# compiles the local db, so 09-terminal-profile.sh (verification only) can
+# read from the compiled db afterwards.
 run_step 06-apply-persistence.sh
 
-# Validation
+# Verify the terminal palette landed in the compiled dconf db
+run_step 09-terminal-profile.sh
+
+# Validation of the full milestone criteria
 run_step 07-validate.sh
 
 echo "" | tee -a "$LOG"

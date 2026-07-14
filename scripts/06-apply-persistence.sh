@@ -39,6 +39,8 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILE_SRC="$HERE/config/dconf-profile"
 BRANDING_SRC="$HERE/config/local.d/00-aiobi-branding"
 PANEL_SRC="$HERE/config/aiobi-panel.dconf"
+WALLPAPER_SRC="$HERE/config/aiobi-wallpaper.dconf"
+TERMINAL_SRC="$HERE/config/aiobi-terminal.dconf"
 
 DCONF_PROFILE="/etc/dconf/profile/user"
 DCONF_LOCAL_D="/etc/dconf/db/local.d"
@@ -60,9 +62,11 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get install -y gnome-shell-extensions fonts-inter fonts-jetbrains-mono || \
     echo "  note: some font packages may not be in current apt cache — will retry"
 
-[ -f "$PROFILE_SRC" ]  || { echo "ERROR: $PROFILE_SRC missing";  exit 1; }
-[ -f "$BRANDING_SRC" ] || { echo "ERROR: $BRANDING_SRC missing"; exit 1; }
-[ -f "$PANEL_SRC" ]    || { echo "ERROR: $PANEL_SRC missing";    exit 1; }
+[ -f "$PROFILE_SRC" ]   || { echo "ERROR: $PROFILE_SRC missing";   exit 1; }
+[ -f "$BRANDING_SRC" ]  || { echo "ERROR: $BRANDING_SRC missing";  exit 1; }
+[ -f "$PANEL_SRC" ]     || { echo "ERROR: $PANEL_SRC missing";     exit 1; }
+[ -f "$WALLPAPER_SRC" ] || { echo "ERROR: $WALLPAPER_SRC missing"; exit 1; }
+[ -f "$TERMINAL_SRC" ]  || { echo "ERROR: $TERMINAL_SRC missing";  exit 1; }
 
 # ----- 0) Sweep foreign keyfiles ---------------------------------------------
 # Any keyfile in /etc/dconf/db/local.d/ that is NOT one of ours can override
@@ -76,6 +80,7 @@ KNOWN_KEYFILES=(
     "00-aiobi-branding"
     "00-aiobi-wallpaper"
     "20-aiobi-panel"
+    "30-aiobi-terminal"
 )
 if [ -d "$DCONF_LOCAL_D" ]; then
     for existing in "$DCONF_LOCAL_D"/*; do
@@ -97,11 +102,13 @@ mkdir -p "$(dirname "$DCONF_PROFILE")"
 install -m 0644 "$PROFILE_SRC" "$DCONF_PROFILE"
 echo "  installed $DCONF_PROFILE"
 
-# ----- 2) Branding keyfile + panel keyfile ------------------------------------
+# ----- 2) Branding + wallpaper + panel + terminal keyfiles -------------------
 mkdir -p "$DCONF_LOCAL_D"
-install -m 0644 "$BRANDING_SRC" "$DCONF_LOCAL_D/00-aiobi-branding"
-install -m 0644 "$PANEL_SRC"    "$DCONF_LOCAL_D/20-aiobi-panel"
-echo "  installed 00-aiobi-branding + 20-aiobi-panel"
+install -m 0644 "$BRANDING_SRC"  "$DCONF_LOCAL_D/00-aiobi-branding"
+install -m 0644 "$WALLPAPER_SRC" "$DCONF_LOCAL_D/00-aiobi-wallpaper"
+install -m 0644 "$PANEL_SRC"     "$DCONF_LOCAL_D/20-aiobi-panel"
+install -m 0644 "$TERMINAL_SRC"  "$DCONF_LOCAL_D/30-aiobi-terminal"
+echo "  installed 00-aiobi-branding + 00-aiobi-wallpaper + 20-aiobi-panel + 30-aiobi-terminal"
 
 # ----- 3) Locks ---------------------------------------------------------------
 mkdir -p "$DCONF_LOCKS"

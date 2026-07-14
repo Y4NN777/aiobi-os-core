@@ -1,0 +1,44 @@
+# Aïobi OS — GNOME Terminal profile defaults
+# Installed at /etc/dconf/db/local.d/30-aiobi-terminal
+#
+# GNOME Terminal reads profile settings from
+#   /org/gnome/terminal/legacy/profiles:/:UUID/...
+# where UUID is the value of ProfilesList/default. GNOME Terminal
+# creates a fresh default profile with a stable UUID
+# (b1dcc9dd-5262-4d8d-a863-c897e6d979b9) on Ubuntu 24.04; this UUID is
+# known to be stable across the 24.04 release cycle and is safe to hard-
+# code here.
+#
+# Palette derived from the reference converged VM:
+#   ANSI 0  : #0F1010 (Aïobi black, background)
+#   ANSI 1  : #D63A3A (red)
+#   ANSI 2  : #65A030 (green)
+#   ANSI 3  : #D4A017 (yellow)
+#   ANSI 4  : #7233CD (Aïobi violet, blue slot)
+#   ANSI 5  : #B593E4 (magenta)
+#   ANSI 6  : #4AB6A6 (cyan)
+#   ANSI 7  : #F8F8F9 (Aïobi white, foreground)
+#   ANSI 8  : #3A3A3D (bright black)
+#   ANSI 9  : #FF6B6B (bright red)
+#   ANSI 10 : #95E063 (bright green)
+#   ANSI 11 : #FFCE45 (bright yellow)
+#   ANSI 12 : #B593E4 (bright blue slot — kept violet family)
+#   ANSI 13 : #D4B8F0 (bright magenta)
+#   ANSI 14 : #7BEDD8 (bright cyan)
+#   ANSI 15 : #FFFFFF (pure white)
+#
+# The default profile is set via the ProfilesList schema so gnome-terminal
+# picks it up on first launch.
+
+[org/gnome/terminal/legacy/profiles:/:b1dcc9dd-5262-4d8d-a863-c897e6d979b9]
+background-color='#0F1010'
+foreground-color='#F8F8F9'
+cursor-colors-set=true
+cursor-background-color='#7233CD'
+cursor-foreground-color='#F8F8F9'
+highlight-colors-set=true
+highlight-background-color='#7233CD'
+highlight-foreground-color='#FFFFFF'
+palette=['#0F1010', '#D63A3A', '#65A030', '#D4A017', '#7233CD', '#B593E4', '#4AB6A6', '#F8F8F9', '#3A3A3D', '#FF6B6B', '#95E063', '#FFCE45', '#B593E4', '#D4B8F0', '#7BEDD8', '#FFFFFF']
+use-theme-colors=false
+use-theme-transparency=false

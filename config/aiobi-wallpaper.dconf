@@ -1,0 +1,32 @@
+# Aïobi OS — desktop + lock screen wallpaper defaults (NOT locked)
+# Installed at /etc/dconf/db/local.d/00-aiobi-wallpaper
+#
+# The wallpaper is deliberately NOT locked: the user must remain free to
+# swap it via Settings → Appearance. This file only sets the initial
+# value that a freshly created account inherits.
+#
+# The PNG file 12.png is one of a set of twenty Aïobi wallpaper variants
+# that must be present at /usr/share/backgrounds/aiobi/ before this
+# keyfile has any visible effect. The V1 release expects those PNG assets
+# to be placed on the chroot manually before the pipeline runs; see the
+# README (Assets section) for the expected layout and the planned V1.1
+# release script that will fetch them from an authoritative source.
+#
+# The reference converged VM selected 12.png as the default wallpaper;
+# the same file is used for the lock screen (screensaver) so the visual
+# identity persists across login and lock states.
+
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/backgrounds/aiobi/12.png'
+picture-uri-dark='file:///usr/share/backgrounds/aiobi/12.png'
+picture-options='zoom'
+color-shading-type='solid'
+primary-color='#0F1010'
+secondary-color='#0F1010'
+
+[org/gnome/desktop/screensaver]
+picture-uri='file:///usr/share/backgrounds/aiobi/12.png'
+picture-options='zoom'
+color-shading-type='solid'
+primary-color='#0F1010'
+secondary-color='#0F1010'
