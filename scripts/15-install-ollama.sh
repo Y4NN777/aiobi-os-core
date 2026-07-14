@@ -115,7 +115,12 @@ else
     echo "  systemd not running (chroot mode) — registering first-boot pull service"
 
     # Deferred pull via a one-shot systemd service run on first boot.
-    tee /etc/systemd/system/aiobi-ollama-firstpull.service > /dev/null << 'EOF'
+    # Ollama binary path: the upstream installer places the binary at
+    # /usr/local/bin/ollama, not /usr/bin/ollama. systemd requires an
+    # absolute path in ExecStart, so we detect the binary location at
+    # install time and inline it into the service unit.
+    OLLAMA_BIN=$(command -v ollama || echo /usr/local/bin/ollama)
+    tee /etc/systemd/system/aiobi-ollama-firstpull.service > /dev/null <<EOF
 [Unit]
 Description=Aïobi OS — pull Qwen 2.5 models on first boot
 Requires=network-online.target ollama.service
@@ -126,8 +131,10 @@ ConditionPathExists=!/var/lib/aiobi-ollama-firstpull-done
 Type=oneshot
 User=ollama
 Environment=HOME=/usr/share/ollama
-ExecStart=/usr/bin/ollama pull qwen2.5:1.5b
-ExecStart=/usr/bin/ollama pull qwen2.5-coder:0.5b
+Environment=OLLAMA_HOST=http://127.0.0.1:11435
+ExecStartPre=/bin/sh -c 'until curl -sf http://127.0.0.1:11435/api/tags >/dev/null 2>&1; do sleep 1; done'
+ExecStart=${OLLAMA_BIN} pull qwen2.5:1.5b
+ExecStart=${OLLAMA_BIN} pull qwen2.5-coder:0.5b
 ExecStartPost=/usr/bin/touch /var/lib/aiobi-ollama-firstpull-done
 RemainAfterExit=yes
 
