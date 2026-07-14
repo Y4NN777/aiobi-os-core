@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------------------
 # Purpose : install the default productivity application set:
 #           OnlyOffice (.deb from vendor), Brave (vendor apt repo),
-#           VLC + Flameshot (Ubuntu universe), PeaZip + AppFlowy (Flatpak
+#           VLC + Flameshot (Ubuntu universe), PeaZip + AppFlowy + Obsidian (Flatpak
 #           from Flathub, as neither is packaged natively in Ubuntu 24.04).
 #
 # Delivers : OnlyOffice as default .docx handler, Brave as alternate browser,
@@ -137,6 +137,14 @@ flatpak_install_with_retry flathub io.github.peazip.PeaZip || true
 
 # --- 6. AppFlowy (Flatpak) --------------------------------------------------
 flatpak_install_with_retry flathub io.appflowy.AppFlowy || true
+
+# --- 7. Obsidian (Flatpak, local-first Markdown knowledge base) -------------
+# Obsidian stores every note as a plain Markdown file in a user-chosen
+# local vault. No cloud sync is required or activated by default, which
+# aligns with the Aïobi zero-data-leak posture more cleanly than
+# AppFlowy (whose onboarding flow prompts for a cloud account). Both are
+# shipped so the user can pick between them.
+flatpak_install_with_retry flathub md.obsidian.Obsidian || true
 
 # --- 7. Verification --------------------------------------------------------
 echo "== Verification =="
