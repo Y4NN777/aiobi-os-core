@@ -70,13 +70,13 @@ echo "$pos" | grep -q "BOTTOM" \
     || nope "panel-positions wrong: $pos"
 
 size=$(dconf_or_keyfile /org/gnome/shell/extensions/dash-to-panel/panel-sizes "$PANEL_KEYFILE" "panel-sizes")
-echo "$size" | grep -q "48" \
-    && ok "panel-sizes = 48px" \
+echo "$size" | grep -q "64" \
+    && ok "panel-sizes = 64px" \
     || nope "panel-sizes wrong: $size"
 
 bg=$(dconf_or_keyfile /org/gnome/shell/extensions/dash-to-panel/trans-bg-color "$PANEL_KEYFILE" "trans-bg-color")
-echo "$bg" | grep -iq "7233CD" \
-    && ok "panel background = #7233CD" \
+echo "$bg" | grep -iq "0F1010" \
+    && ok "panel background = #0F1010 (Aïobi black)" \
     || nope "panel background wrong: $bg"
 
 # ----- GTK theme -------------------------------------------------------------
