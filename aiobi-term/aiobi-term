@@ -78,11 +78,17 @@ def call_ollama(model: str, system: str, prompt: str, timeout: float = 60.0) -> 
 
 
 def strip_fences(text: str) -> str:
-    """Strip markdown code fences and leading '$ ' from a coder response."""
+    """Strip markdown code fences, wrapping backticks, and leading '$ '
+    from a coder response, so the user can pipe or paste the result as-is."""
     text = text.strip()
+    # Triple-backtick block: ```bash\n...\n```
     text = re.sub(r"^```[a-zA-Z0-9]*\n", "", text)
     text = re.sub(r"\n```\s*$", "", text)
     text = text.strip()
+    # Single wrapping backticks: `command`
+    if len(text) >= 2 and text.startswith("`") and text.endswith("`"):
+        text = text[1:-1].strip()
+    # Leading '$ ' or '$' prompt char that some models add
     if text.startswith("$ "):
         text = text[2:]
     elif text.startswith("$"):
