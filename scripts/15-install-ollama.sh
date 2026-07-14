@@ -4,10 +4,16 @@
 # ----------------------------------------------------------------------------
 # Purpose : install Ollama as a system service, bind it to the loopback
 #           interface only (127.0.0.1), configure it to unload models after
-#           an idle window (OLLAMA_KEEP_ALIVE), and pre-pull the two Qwen 2.5
+#           an idle window (OLLAMA_KEEP_ALIVE), and pre-pull the two Qwen
 #           models the Aïobi AI layer relies on:
-#             - qwen2.5:1.5b        (general-purpose chat, ~1 GB)
-#             - qwen2.5-coder:0.5b  (natural-language → shell command, ~400 MB)
+#             - qwen2.5:1.5b   (terminal SLM: chat + shell-command extraction
+#                              via aiobi-term with two system prompts, ~1 GB)
+#             - qwen3-vl:2b-instruct-q8_0
+#                              (desktop VLM: multi-modal chat exposed through
+#                              AnythingLLM, text + image input, ~2.6 GB — the
+#                              Q8 Instruct variant is picked over the Q4 base
+#                              tag to eliminate the reasoning-token verbosity
+#                              observed on the base tag for vision responses.)
 #
 # Zero-data-leak posture
 #   OLLAMA_HOST=127.0.0.1 tells the daemon to bind exclusively on the
@@ -105,8 +111,8 @@ wait_for_ollama() {
 # started synchronously.
 if [ -d /run/systemd/system ] && wait_for_ollama; then
     echo "  daemon is ready — pulling models now"
-    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen2.5:1.5b       || echo "    ⚠ qwen2.5:1.5b pull failed"
-    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen2.5-coder:0.5b || echo "    ⚠ qwen2.5-coder:0.5b pull failed"
+    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen2.5:1.5b || echo "    ⚠ qwen2.5:1.5b pull failed"
+    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen3-vl:2b-instruct-q8_0   || echo "    ⚠ qwen3-vl:2b-instruct-q8_0 pull failed"
 elif [ -d /run/systemd/system ]; then
     echo "  daemon did not become reachable within 60s on a live systemd host"
     echo "  → check 'systemctl status ollama.service' + 'journalctl -u ollama.service -b'"
@@ -122,7 +128,7 @@ else
     OLLAMA_BIN=$(command -v ollama || echo /usr/local/bin/ollama)
     tee /etc/systemd/system/aiobi-ollama-firstpull.service > /dev/null <<EOF
 [Unit]
-Description=Aïobi OS — pull Qwen 2.5 models on first boot
+Description=Aïobi OS — pull terminal SLM + desktop VLM on first boot
 Requires=network-online.target ollama.service
 After=network-online.target ollama.service
 ConditionPathExists=!/var/lib/aiobi-ollama-firstpull-done
@@ -134,7 +140,7 @@ Environment=HOME=/usr/share/ollama
 Environment=OLLAMA_HOST=http://127.0.0.1:11435
 ExecStartPre=/bin/sh -c 'until curl -sf http://127.0.0.1:11435/api/tags >/dev/null 2>&1; do sleep 1; done'
 ExecStart=${OLLAMA_BIN} pull qwen2.5:1.5b
-ExecStart=${OLLAMA_BIN} pull qwen2.5-coder:0.5b
+ExecStart=${OLLAMA_BIN} pull qwen3-vl:2b-instruct-q8_0
 ExecStartPost=/usr/bin/touch /var/lib/aiobi-ollama-firstpull-done
 RemainAfterExit=yes
 

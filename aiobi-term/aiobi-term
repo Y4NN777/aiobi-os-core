@@ -4,19 +4,28 @@
 # Talks to a locally-bound Ollama daemon on http://127.0.0.1:11434.
 #
 # Modes
-#   aiobi-term "<question>"          conversational   (qwen2.5:1.5b)
-#   aiobi-term --cmd "<request>"     shell command    (qwen2.5-coder:0.5b)
+#   aiobi-term "<question>"          conversational   (chat system prompt)
+#   aiobi-term --cmd "<request>"     shell command    (cmd system prompt +
+#                                                     deterministic decoding)
 #   aiobi-term --chat                interactive REPL
+#
+# Model
+#   A single small language model (qwen2.5:1.5b) serves both modes. The
+#   two modes differ by system prompt and sampling — chat runs with the
+#   model's default sampling, cmd runs deterministic (temperature 0) with
+#   few-shot examples for tight shell-command extraction. Consolidating on
+#   one model saves ~400 MB of RAM footprint versus a separate coder
+#   variant, at the cost of some flexibility in output shape for cmd mode
+#   (which is compensated by prompt engineering + post-processing below).
 #
 # Contract
 #   * stdlib only — no pip install required.
 #   * loopback only — every request goes to 127.0.0.1:11434, no other host
 #     is ever contacted. If the daemon is unreachable the tool prints an
 #     actionable hint and exits non-zero.
-#   * user confirmation is required for every shell command: the coder
-#     model returns a suggestion, aiobi-term prints it, and the user
-#     decides whether to run it. aiobi-term itself does NOT execute the
-#     suggestion.
+#   * user confirmation is required for every shell command: the model
+#     returns a suggestion, aiobi-term prints it, and the user decides
+#     whether to run it. aiobi-term itself does NOT execute the suggestion.
 
 import argparse
 import json
@@ -28,8 +37,7 @@ import urllib.error
 
 OLLAMA_ENDPOINT = "http://127.0.0.1:11434/api/generate"
 
-CHAT_MODEL = "qwen2.5:1.5b"
-CODE_MODEL = "qwen2.5-coder:0.5b"
+MODEL = "qwen2.5:1.5b"
 
 CHAT_SYSTEM = (
     "You are the Aïobi terminal assistant, the built-in AI of Aïobi OS. "
@@ -39,20 +47,46 @@ CHAT_SYSTEM = (
 
 CODE_SYSTEM = (
     "You translate the user's natural-language request into a single "
-    "safe shell command for Ubuntu 24.04. Return ONLY the command, on "
-    "one line, with no explanation, no code fence, no leading '$' and "
-    "no trailing punctuation. If the request is destructive or ambiguous, "
-    "prefix the command with a single '# ' and a one-sentence warning."
+    "safe shell command for Ubuntu 24.04. Output ONLY the command, on "
+    "one line, with no explanation, no markdown, no code fence, no "
+    "leading '$', no trailing comment, no trailing punctuation. "
+    "If the request is destructive or ambiguous, output a single line "
+    "starting with '# ' followed by a one-sentence warning instead of "
+    "a command.\n"
+    "\n"
+    "Examples:\n"
+    "Request: list every running service\n"
+    "Command: systemctl list-units --type=service --state=running\n"
+    "\n"
+    "Request: show free disk on the root filesystem\n"
+    "Command: df -h /\n"
+    "\n"
+    "Request: top 10 processes by memory usage\n"
+    "Command: ps aux --sort=-%mem | head -n 11\n"
+    "\n"
+    "Request: format /dev/sda\n"
+    "Command: # destructive; specify filesystem and confirm the target device first"
 )
 
+CMD_DECODING_OPTIONS = {
+    "temperature": 0,
+    "top_k": 1,
+    "top_p": 0.1,
+    "num_predict": 128,
+}
 
-def call_ollama(model: str, system: str, prompt: str, timeout: float = 60.0) -> str:
-    body = json.dumps({
-        "model": model,
+
+def call_ollama(system: str, prompt: str, options: dict | None = None,
+                timeout: float = 60.0) -> str:
+    payload = {
+        "model": MODEL,
         "system": system,
         "prompt": prompt,
         "stream": False,
-    }).encode("utf-8")
+    }
+    if options:
+        payload["options"] = options
+    body = json.dumps(payload).encode("utf-8")
 
     req = urllib.request.Request(
         OLLAMA_ENDPOINT,
@@ -79,7 +113,8 @@ def call_ollama(model: str, system: str, prompt: str, timeout: float = 60.0) -> 
 
 def strip_fences(text: str) -> str:
     """Strip markdown code fences, wrapping backticks, and leading '$ '
-    from a coder response, so the user can pipe or paste the result as-is."""
+    from a model response, then collapse to the first non-empty line,
+    so the user can pipe or paste the result as-is."""
     text = text.strip()
     # Triple-backtick block: ```bash\n...\n```
     text = re.sub(r"^```[a-zA-Z0-9]*\n", "", text)
@@ -93,22 +128,31 @@ def strip_fences(text: str) -> str:
         text = text[2:]
     elif text.startswith("$"):
         text = text[1:].lstrip()
+    # A chat-tuned model sometimes prefaces the command with a sentence
+    # or trails it with commentary despite the strict system prompt. The
+    # CODE_SYSTEM contract is one line, so we take the first non-empty
+    # one — the '# warning' case is preserved because it is itself the
+    # first line.
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped:
+            return stripped
     return text
 
 
 def do_command(request: str) -> None:
-    response = call_ollama(CODE_MODEL, CODE_SYSTEM, request)
+    response = call_ollama(CODE_SYSTEM, request, options=CMD_DECODING_OPTIONS)
     print(strip_fences(response))
 
 
 def do_chat(question: str) -> None:
-    response = call_ollama(CHAT_MODEL, CHAT_SYSTEM, question)
+    response = call_ollama(CHAT_SYSTEM, question)
     print(response)
 
 
 def do_repl() -> None:
     print("aiobi-term — interactive chat. Type 'exit' to quit.")
-    print("             (uses qwen2.5:1.5b on 127.0.0.1:11434)")
+    print(f"             (uses {MODEL} on 127.0.0.1:11434)")
     while True:
         try:
             line = input("you> ").strip()
@@ -119,7 +163,7 @@ def do_repl() -> None:
             continue
         if line.lower() in {"exit", "quit", "bye"}:
             return
-        print("ai>  " + call_ollama(CHAT_MODEL, CHAT_SYSTEM, line))
+        print("ai>  " + call_ollama(CHAT_SYSTEM, line))
 
 
 def main() -> int:

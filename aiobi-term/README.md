@@ -29,10 +29,10 @@ parent repository.
 ## Usage
 
 ```bash
-# Conversational answer (qwen2.5:1.5b)
+# Conversational answer
 aiobi-term "What is systemd, in one sentence?"
 
-# Shell-command suggestion (qwen2.5-coder:0.5b)
+# Shell-command suggestion (deterministic decoding + few-shot prompt)
 aiobi-term --cmd "list all listening TCP ports"
 
 # Interactive chat REPL
@@ -44,12 +44,28 @@ aiobi-term --chat
 
 ## Model choice
 
-| Alias      | Ollama tag             | Size    | Role                            |
-|------------|------------------------|---------|---------------------------------|
-| chat model | `qwen2.5:1.5b`         | ~1.0 GB | Conversational answers          |
-| code model | `qwen2.5-coder:0.5b`   | ~0.4 GB | Shell command generation        |
+`aiobi-term` uses a single small language model for both modes; the two
+modes differ only in system prompt and sampling.
 
-Both models are pulled once at first boot by
-`aiobi-ollama-firstpull.service` (registered by `15-install-ollama.sh`)
-and unloaded from memory after five minutes of idleness via
-`OLLAMA_KEEP_ALIVE`.
+| Ollama tag       | Size    | Role in aiobi-term                                    |
+|------------------|---------|-------------------------------------------------------|
+| `qwen2.5:1.5b`   | ~1.0 GB | Chat mode (default sampling) + `--cmd` mode (T=0, few-shot) |
+
+Consolidating on one model saves ~400 MB of RAM footprint compared with
+running a separate coder variant. The `--cmd` mode compensates for the
+absence of a code-tuned model with:
+
+- **Deterministic decoding** — `temperature=0`, `top_k=1`, `top_p=0.1`,
+  so the same request produces the same command.
+- **Few-shot prompt** — the `CODE_SYSTEM` prompt embeds four
+  request-to-command examples (list services, disk free, top by memory,
+  destructive request) to anchor the output shape.
+- **Post-processing** — `strip_fences()` removes markdown fences,
+  wrapping backticks, leading `$`, and trailing prose, then collapses
+  the response to its first non-empty line.
+
+The model is pulled once at first boot by `aiobi-ollama-firstpull.service`
+(registered by `15-install-ollama.sh`) alongside
+`qwen3-vl:2b-instruct-q8_0` (the multimodal chat model consumed by the
+AnythingLLM desktop app). Both models are unloaded from memory after
+five minutes of idleness via `OLLAMA_KEEP_ALIVE`.
