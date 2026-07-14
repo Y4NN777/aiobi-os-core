@@ -121,6 +121,14 @@ After=ollama.service ollama-proxy.socket
 
 [Service]
 Type=notify
+# After=ollama.service only guarantees the unit is Active (ExecStart
+# invoked), not that ollama has finished binding 127.0.0.1:11435. The
+# proxy would race the daemon, hit ECONNREFUSED, and drop the client
+# connection (visible on the client side as 'Connection reset by peer').
+# ExecStartPre blocks until the private endpoint actually responds to
+# an HTTP request, with a bounded 30-second wait, before the proxy
+# starts forwarding.
+ExecStartPre=/bin/sh -c 'i=0; while ! curl -sf --max-time 1 http://127.0.0.1:11435/api/tags >/dev/null 2>&1; do i=$((i+1)); [ $i -ge 30 ] && exit 1; sleep 1; done'
 ExecStart=/usr/lib/systemd/systemd-socket-proxyd --exit-idle-time=300 127.0.0.1:11435
 PrivateTmp=yes
 NoNewPrivileges=yes
