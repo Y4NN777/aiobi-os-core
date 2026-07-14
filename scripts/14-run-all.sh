@@ -82,7 +82,7 @@ run_step 13-productivity-stack.sh
 
 # AI layer — Ollama daemon, CLI, GUI, memory tuning
 run_step 15-install-ollama.sh
-run_step 17-install-ai-cli.sh
+run_step 17-install-aiobi-term.sh
 run_step 18-install-anythingllm.sh
 run_step 19-tune-ram.sh
 

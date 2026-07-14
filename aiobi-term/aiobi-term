@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+# aiobi-term — terminal AI assistant for Aïobi OS
+#
+# Talks to a locally-bound Ollama daemon on http://127.0.0.1:11434.
+#
+# Modes
+#   aiobi-term "<question>"          conversational   (qwen2.5:1.5b)
+#   aiobi-term --cmd "<request>"     shell command    (qwen2.5-coder:0.5b)
+#   aiobi-term --chat                interactive REPL
+#
+# Contract
+#   * stdlib only — no pip install required.
+#   * loopback only — every request goes to 127.0.0.1:11434, no other host
+#     is ever contacted. If the daemon is unreachable the tool prints an
+#     actionable hint and exits non-zero.
+#   * user confirmation is required for every shell command: the coder
+#     model returns a suggestion, aiobi-term prints it, and the user
+#     decides whether to run it. aiobi-term itself does NOT execute the
+#     suggestion.
+
+import argparse
+import json
+import re
+import sys
+import urllib.request
+import urllib.error
+
+
+OLLAMA_ENDPOINT = "http://127.0.0.1:11434/api/generate"
+
+CHAT_MODEL = "qwen2.5:1.5b"
+CODE_MODEL = "qwen2.5-coder:0.5b"
+
+CHAT_SYSTEM = (
+    "You are the Aïobi terminal assistant, the built-in AI of Aïobi OS. "
+    "Answer the user's question concisely and in the language they used. "
+    "If they ask about system administration, prefer Ubuntu 24.04 conventions."
+)
+
+CODE_SYSTEM = (
+    "You translate the user's natural-language request into a single "
+    "safe shell command for Ubuntu 24.04. Return ONLY the command, on "
+    "one line, with no explanation, no code fence, no leading '$' and "
+    "no trailing punctuation. If the request is destructive or ambiguous, "
+    "prefix the command with a single '# ' and a one-sentence warning."
+)
+
+
+def call_ollama(model: str, system: str, prompt: str, timeout: float = 60.0) -> str:
+    body = json.dumps({
+        "model": model,
+        "system": system,
+        "prompt": prompt,
+        "stream": False,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        OLLAMA_ENDPOINT,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.load(resp)
+            return (data.get("response") or "").strip()
+    except urllib.error.URLError as exc:
+        sys.stderr.write(
+            "aiobi-term: cannot reach the local Ollama daemon on 127.0.0.1:11434\n"
+            f"           reason: {exc.reason}\n"
+            "           hint  : run `systemctl start ollama` and retry\n"
+        )
+        sys.exit(2)
+    except Exception as exc:
+        sys.stderr.write(f"aiobi-term: unexpected error: {exc}\n")
+        sys.exit(3)
+
+
+def strip_fences(text: str) -> str:
+    """Strip markdown code fences and leading '$ ' from a coder response."""
+    text = text.strip()
+    text = re.sub(r"^```[a-zA-Z0-9]*\n", "", text)
+    text = re.sub(r"\n```\s*$", "", text)
+    text = text.strip()
+    if text.startswith("$ "):
+        text = text[2:]
+    elif text.startswith("$"):
+        text = text[1:].lstrip()
+    return text
+
+
+def do_command(request: str) -> None:
+    response = call_ollama(CODE_MODEL, CODE_SYSTEM, request)
+    print(strip_fences(response))
+
+
+def do_chat(question: str) -> None:
+    response = call_ollama(CHAT_MODEL, CHAT_SYSTEM, question)
+    print(response)
+
+
+def do_repl() -> None:
+    print("aiobi-term — interactive chat. Type 'exit' to quit.")
+    print("             (uses qwen2.5:1.5b on 127.0.0.1:11434)")
+    while True:
+        try:
+            line = input("you> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if not line:
+            continue
+        if line.lower() in {"exit", "quit", "bye"}:
+            return
+        print("ai>  " + call_ollama(CHAT_MODEL, CHAT_SYSTEM, line))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="aiobi-term",
+        description=(
+            "Aïobi OS terminal AI assistant — talks to the local Ollama "
+            "daemon bound on 127.0.0.1:11434."
+        ),
+    )
+    parser.add_argument("--cmd", action="store_true",
+                        help="Return a shell command suggestion instead of a chat answer.")
+    parser.add_argument("--chat", action="store_true",
+                        help="Start an interactive chat REPL.")
+    parser.add_argument("prompt", nargs="*",
+                        help="The question or request. Read from stdin if empty.")
+    args = parser.parse_args()
+
+    if args.chat:
+        do_repl()
+        return 0
+
+    if args.prompt:
+        request = " ".join(args.prompt)
+    elif not sys.stdin.isatty():
+        request = sys.stdin.read().strip()
+    else:
+        parser.print_help(sys.stderr)
+        return 1
+
+    if args.cmd:
+        do_command(request)
+    else:
+        do_chat(request)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
