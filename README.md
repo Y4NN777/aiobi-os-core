@@ -11,13 +11,16 @@ Aïobi OS* (RN Yanis Axel DABO, Burkina Institute of Technology).
 
 ## What this repository is
 
-- **20 idempotent shell scripts** that apply the six customization
+- **21 idempotent shell scripts** that apply the six customization
   layers (system identity, visual identity, shell composition,
   application inventory, on-device AI, persistence & lockdown) plus a
-  validation script and an all-in-one orchestrator.
+  validation script and an all-in-one orchestrator (`run-all.sh`).
 - **`aiobi-term/`** — the on-device terminal AI assistant: a stdlib-only
-  Python CLI plus a Bash/Zsh readline integration (`Ctrl-X Ctrl-A`),
-  wired to the locally-bound Ollama daemon.
+  Python CLI, a Python package with a deterministic knowledge base
+  (~50 curated rules across deprecated tools, Aïobi-purged apps,
+  systemd/filesystem/network/package-mgr/python/git/ssh/docker/display
+  errors, EN + FR i18n), and a Bash/Zsh readline integration
+  (`Ctrl-X Ctrl-A` for `--cmd`, `Ctrl-X Ctrl-H` for `--explain`).
 - **`design/`** — the architecture diagrams (UMLs) that back the thesis
   chapters: component view, secure-boot sequence, security layer,
   AI use-case / deployment / lifecycle / sequence.
@@ -59,15 +62,37 @@ aiobi-os-core/
 │   ├── 11-apt-brand-alias.sh       # /etc/hosts + DEB822 mirror alias
 │   ├── 12-wine-proton-install.sh   # Wine 9.0 + GE-Proton + MIME handlers
 │   ├── 13-productivity-stack.sh    # OnlyOffice + Brave + VLC + Flameshot + Flatpaks
-│   ├── 14-run-all.sh               # orchestrator (chains all steps + 07)
 │   ├── 15-install-ollama.sh        # Ollama daemon + first-boot model pull (loopback)
-│   ├── 17-install-aiobi-term.sh    # aiobi-term Python CLI + shell integration
+│   ├── 17-install-aiobi-term.sh    # aiobi-term CLI + knowledge package + shell integration
 │   ├── 18-install-anythingllm.sh   # AnythingLLM Desktop AppImage
 │   ├── 19-tune-ram.sh              # zRAM (zstd) + Ollama socket activation
-│   └── 20-ai-firewall.sh           # iptables OUTPUT REJECT :11434 non-loopback
+│   ├── 20-ai-firewall.sh           # iptables OUTPUT REJECT :11434 non-loopback
+│   ├── 21-configure-bash-completion.sh  # TAB menu-complete + argcomplete + skel setup
+│   └── run-all.sh                  # orchestrator (no number — entry point, not a step)
 ├── aiobi-term/
-│   ├── aiobi-term                  # Python 3 CLI (stdlib only)
-│   ├── aiobi-term.sh               # Bash/Zsh readline binding (Ctrl-X Ctrl-A)
+│   ├── aiobi-term                  # Python 3 CLI entry point (stdlib only)
+│   ├── aiobi-term.sh               # Bash/Zsh readline bindings
+│   │                               # (Ctrl-X Ctrl-A = --cmd, Ctrl-X Ctrl-H = --explain)
+│   ├── aiobi_term/                 # Python package (installed to /usr/local/lib/aiobi-term/)
+│   │   ├── __init__.py
+│   │   └── knowledge/
+│   │       ├── __init__.py         # public API: lookup, LookupResult, Rule, Match, Category
+│   │       ├── rule.py             # typed dataclasses (Rule, Match, Category, LookupResult)
+│   │       ├── engine.py           # matcher + priority resolver + template renderer
+│   │       ├── i18n.py             # Translator (LANG detection) + EN + FR message tables
+│   │       ├── loader.py           # rule aggregator (explicit imports, no runtime magic)
+│   │       └── rules/              # 11 rule modules, ~50 curated rules total
+│   │           ├── deprecated_tools.py
+│   │           ├── aiobi_purged.py
+│   │           ├── systemd_errors.py
+│   │           ├── filesystem_errors.py
+│   │           ├── network_errors.py
+│   │           ├── package_mgr.py
+│   │           ├── python_errors.py
+│   │           ├── git_errors.py
+│   │           ├── ssh_errors.py
+│   │           ├── docker_errors.py
+│   │           └── xorg_wayland.py
 │   └── README.md                   # design + usage
 ├── design/
 │   ├── aiobi_component.png         # core-OS component view
@@ -104,7 +129,7 @@ scp -r aiobi-os-core/ <chroot-host>:/tmp/
 cd /tmp/aiobi-os-core
 
 # 3. Recommended --- one-shot orchestrator (runs all layers + validation):
-bash scripts/14-run-all.sh
+bash scripts/run-all.sh
 
 # Or run individually, in the orchestrator's order:
 bash scripts/01-install-extensions.sh
@@ -122,6 +147,7 @@ bash scripts/17-install-aiobi-term.sh
 bash scripts/18-install-anythingllm.sh
 bash scripts/19-tune-ram.sh
 bash scripts/20-ai-firewall.sh
+bash scripts/21-configure-bash-completion.sh
 bash scripts/06-apply-persistence.sh
 bash scripts/09-terminal-profile.sh
 bash scripts/07-validate.sh

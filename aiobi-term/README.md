@@ -16,13 +16,22 @@ conversation with a local language model.
   the suggestion; the user decides whether to run it. `aiobi-term`
   itself never executes shell commands.
 - **Software-intelligence recovery loop.** `--explain` closes the
-  feedback loop when the model gets a suggestion wrong: the user runs
-  the suggested command, it fails, and `aiobi-term --explain "<cmd>"`
-  (or `Ctrl-X Ctrl-H` on the last history entry) asks the chat model
-  to reason about the likely failure cause on Ubuntu 24.04 and propose
-  a corrected alternative. No re-execution — the model reasons from
-  the command shape alone, so there is no risk of triggering side
-  effects again.
+  feedback loop when a command fails: `aiobi-term --explain "<cmd>"`
+  (or `Ctrl-X Ctrl-H` on the last history entry) explains the likely
+  cause on Aïobi OS and proposes a corrected alternative. Two-layer
+  architecture:
+    1. **Deterministic knowledge base** (see `aiobi_term/knowledge/`) —
+       ~50 curated rules pattern-match the command shape and/or the
+       shell error text (passed via `--error`). When a rule hits, the
+       localized cause + corrective one-liner is printed instantly, with
+       no LLM call. Zero latency, zero hallucination, deterministic
+       across identical inputs. Categories: deprecated tools (netstat,
+       ifconfig, nslookup, telnet…), Aïobi-purged apps (snap,
+       libreoffice, rhythmbox…), systemd/filesystem/network/
+       package-manager/python/git/ssh/docker/display errors.
+    2. **LLM fallback** — only invoked when the knowledge base misses.
+       Strict two-line format (`cause` + `Try: <cmd>`), deterministic
+       decoding, no re-execution of the failing command.
 - **Destructive-pattern guardrail.** The CODE_SYSTEM prompt asks the
   model to emit destructive suggestions as *two lines* — a `# ` warning
   first, then the actual command — so the user sees both the risk and
@@ -34,13 +43,38 @@ conversation with a local language model.
 
 ## Files
 
-| File               | Purpose                                                  |
-|--------------------|----------------------------------------------------------|
-| `aiobi-term`       | Python 3 CLI (installed at `/usr/local/bin/aiobi-term`)  |
-| `aiobi-term.sh`    | Shell integration (installed at `/etc/profile.d/`)       |
+| File / directory    | Purpose                                                                                       |
+|---------------------|-----------------------------------------------------------------------------------------------|
+| `aiobi-term`        | Python 3 CLI entry point — installed at `/usr/local/bin/aiobi-term`                           |
+| `aiobi-term.sh`     | Shell integration (readline bindings) — installed at `/etc/profile.d/aiobi-term.sh`           |
+| `aiobi_term/`       | Python package (knowledge base + engine + i18n + rules) — installed at `/usr/local/lib/aiobi-term/aiobi_term/` |
 
 The install is performed by `scripts/17-install-aiobi-term.sh` in the
-parent repository.
+parent repository. The package lives under `/usr/local/lib/aiobi-term/`
+(not under `/usr/local/lib/pythonX.Y/dist-packages/`) so it is
+independent of the system Python's minor version; the CLI adds the
+directory to `sys.path` at startup.
+
+### Knowledge base layout
+
+Everything below `aiobi_term/knowledge/`:
+
+| Module          | Role                                                              |
+|-----------------|-------------------------------------------------------------------|
+| `rule.py`       | Typed dataclasses: `Rule`, `Match`, `Category`, `LookupResult`    |
+| `engine.py`     | `lookup(command, error, lang) → LookupResult \| None` — matcher, priority resolver, template renderer for `{cmd}`, `{cmd_bin}`, `{arg1}`, `{arg2}`, `{argN}` |
+| `i18n.py`       | `Translator` — reads `$AIOBI_TERM_LANG` (override) then `$LANG`; falls back to English if a key is missing in the requested language |
+| `loader.py`     | Aggregates `RULES` from every module in `rules/` — explicit imports, no runtime magic |
+| `rules/*.py`    | 11 rule modules, one per category (~5-15 rules each, ~50 total)   |
+
+### Adding a rule (V1.1+)
+
+1. Add a `Rule(...)` entry to the relevant `rules/<category>.py`.
+2. Add its `cause_key` string to both `messages/en` (`i18n.MESSAGES_EN`)
+   and `messages/fr` (`i18n.MESSAGES_FR`) in `i18n.py`.
+3. Confirm the rule fires on realistic inputs — run the module
+   directly against the smoke-test harness in `test_all.sh`
+   (V1.1 candidate).
 
 ## Usage
 

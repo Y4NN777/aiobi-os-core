@@ -45,6 +45,17 @@ import sys
 import urllib.request
 import urllib.error
 
+# The aiobi_term package (knowledge base + i18n + rules) is installed
+# to /usr/local/lib/aiobi-term/ by scripts/17-install-aiobi-term.sh.
+# Inject that path so the CLI can import it regardless of the Python
+# version on the target system.
+sys.path.insert(0, "/usr/local/lib/aiobi-term")
+try:
+    from aiobi_term.knowledge import lookup as _kb_lookup
+    _HAS_KNOWLEDGE_BASE = True
+except ImportError:
+    _HAS_KNOWLEDGE_BASE = False
+
 
 OLLAMA_ENDPOINT = "http://127.0.0.1:11434/api/generate"
 
@@ -349,24 +360,34 @@ def _format_explain_output(text: str) -> str:
 def do_explain(command: str, error: str = "") -> None:
     """Software-intelligence wrapper: the user pastes a shell command
     that failed (and optionally the stderr/error output from the shell)
-    and the chat model reasons about the failure mode on Aïobi OS
-    (built on Ubuntu 24.04) and proposes a corrected alternative.
+    and aiobi-term reasons about the failure mode on Aïobi OS (built
+    on Ubuntu 24.04) and proposes a corrected alternative.
 
-    Two invocation shapes:
-      * `aiobi-term --explain "<cmd>"` — command shape only, model reasons
-        from the command name alone. Sufficient for well-known deprecated
-        tools (netstat, ifconfig, snap install ...).
-      * `aiobi-term --explain "<cmd>" --error "<stderr text>"` — command
-        + actual shell error output. Massively improves diagnosis for
-        opaque failures (permission denied, connection refused, config
-        syntax errors) where the command shape alone is not enough.
+    Two-layer architecture:
+      1. Deterministic knowledge base lookup — the `aiobi_term.knowledge`
+         package pattern-matches the command shape and/or the error text
+         against ~50 curated rules covering deprecated tools, Aïobi-purged
+         apps, systemd errors, filesystem errors, network errors, package
+         manager errors, python errors, git, ssh, docker, and X11/Wayland.
+         When a rule hits, its localized cause + corrective one-liner are
+         printed instantly with no LLM call. Zero latency, zero
+         hallucination, deterministic across identical inputs.
+      2. LLM fallback — only invoked when the knowledge base misses.
+         The chat model reasons from the command shape and (optionally)
+         the error text using the EXPLAIN_SYSTEM prompt, and its output
+         is normalized to the same two-line format by `_format_explain_output`.
 
-    No re-execution: the model reasons from the provided inputs, which
-    is safe (no side effects) and avoids re-triggering time-consuming
-    or destructive commands.
-
-    Uses deterministic decoding + post-processing to enforce the
-    two-line output contract."""
+    No re-execution: neither the knowledge base nor the LLM path re-runs
+    the failing command. Both reason from the provided textual inputs,
+    which is safe (no side effects, no repeated cost)."""
+    # Layer 1 — deterministic knowledge base
+    if _HAS_KNOWLEDGE_BASE:
+        hit = _kb_lookup(command, error)
+        if hit:
+            print(hit.cause)
+            print(f"Try: {hit.try_line}")
+            return
+    # Layer 2 — LLM fallback
     if error:
         prompt = f"Command: {command}\nError output: {error}"
     else:
