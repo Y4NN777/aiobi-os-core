@@ -7,12 +7,18 @@
 #             OnlyOffice (.deb from vendor) as the primary office suite,
 #             Brave (vendor apt repo) as alternate browser,
 #             VLC + Flameshot (Ubuntu universe),
-#             PeaZip + AppFlowy + Obsidian (Flatpak from Flathub, none
-#             packaged natively in Ubuntu 24.04).
+#             PeaZip + Obsidian (Flatpak from Flathub, neither packaged
+#             natively in Ubuntu 24.04).
 #
 # Delivers : OnlyOffice as sole and default .docx handler, Brave as
-#            alternate browser, VLC + Flameshot + PeaZip + AppFlowy +
-#            Obsidian pre-installed.
+#            alternate browser, VLC + Flameshot + PeaZip + Obsidian
+#            pre-installed. AppFlowy was previously shipped alongside
+#            Obsidian; it is now dropped because its onboarding flow
+#            requires a cloud account, which clashes with the Aïobi OS
+#            zero-data-leak posture. Obsidian ships as sole knowledge-
+#            base tool: it stores every note as a plain Markdown file
+#            in a user-chosen local vault, no cloud sync required or
+#            activated by default.
 #
 # Non-interactive apt caveat
 #   OnlyOffice's postinst script exposes an interactive EULA that blocks
@@ -95,9 +101,9 @@ fi
 apt-get install -y vlc flameshot
 
 # --- 4. Flatpak infrastructure ----------------------------------------------
-# PeaZip and AppFlowy both ship as Flatpaks from Flathub — Ubuntu 24.04 does
-# not package PeaZip in its repos and AppFlowy is Rust-based with
-# no official .deb, only Flatpak/AppImage.
+# PeaZip and Obsidian both ship as Flatpaks from Flathub — Ubuntu 24.04 does
+# not package PeaZip in its repos, and Obsidian is Electron-based with
+# only .deb/.tar.gz upstream releases (no maintained apt repo).
 apt-get install -y flatpak
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
@@ -171,15 +177,13 @@ flatpak_install_with_retry() {
 # --- 5. PeaZip (Flatpak) ----------------------------------------------------
 flatpak_install_with_retry flathub io.github.peazip.PeaZip || true
 
-# --- 6. AppFlowy (Flatpak) --------------------------------------------------
-flatpak_install_with_retry flathub io.appflowy.AppFlowy || true
-
-# --- 7. Obsidian (Flatpak, local-first Markdown knowledge base) -------------
+# --- 6. Obsidian (Flatpak, local-first Markdown knowledge base) -------------
 # Obsidian stores every note as a plain Markdown file in a user-chosen
 # local vault. No cloud sync is required or activated by default, which
-# aligns with the Aïobi zero-data-leak posture more cleanly than
-# AppFlowy (whose onboarding flow prompts for a cloud account). Both are
-# shipped so the user can pick between them.
+# aligns with the Aïobi OS zero-data-leak posture. Chosen over AppFlowy
+# whose onboarding flow prompts for a cloud account on first launch;
+# AppFlowy was previously shipped alongside Obsidian and is now dropped
+# to keep the knowledge-base surface single-and-clear.
 flatpak_install_with_retry flathub md.obsidian.Obsidian || true
 
 # --- 7. Verification --------------------------------------------------------
@@ -189,7 +193,7 @@ echo "apt-installed (dpkg -l | grep -E '^ii  (onlyoffice|brave|vlc|flameshot)'):
 dpkg -l | grep -E '^ii  (onlyoffice|brave|vlc|flameshot)' | awk '{printf "  %-40s %s\n", $2, $3}'
 echo
 echo "flatpaks:"
-flatpak list --app 2>/dev/null | grep -Ei "peazip|appflowy" || echo "  none listed"
+flatpak list --app 2>/dev/null | grep -Ei "peazip|obsidian" || echo "  none listed"
 echo
 echo "Launcher binaries:"
 for cmd in onlyoffice-desktopeditors brave-browser vlc flameshot; do
