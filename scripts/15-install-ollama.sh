@@ -86,16 +86,34 @@ mkdir -p "$MODELS_DIR"
 chown -R ollama:ollama /usr/share/ollama
 chmod -R u+rwX,g+rX,o+rX /usr/share/ollama
 
-# On a live system: pull via the running daemon.
-# In a chroot (no live daemon): the pull is deferred to first boot via the
-# firstboot service registered below. We detect the mode via `systemctl
-# is-active`.
+# Chroot-time pull strategy (air-gapped install support):
+#
+#   Aïobi's defense positioning requires models to SHIP IN THE ISO so
+#   the on-device AI works out of the box without network access at
+#   first login. That means the pull must complete at chroot / build
+#   time, not deferred to first boot.
+#
+#   Two possible paths bind an Ollama daemon at chroot time:
+#     - Path A: systemctl restart ollama.service (works when Cubic's
+#       chroot has functional systemd — some setups do, some don't)
+#     - Path B: manual background `ollama serve` process as a fallback
+#       for chroot environments where systemctl cannot bring up units
+#
+#   We try Path A first (systemctl restart above already fired at the
+#   end of section 2). If the daemon is not reachable within 10 s, we
+#   fall through to Path B — start the daemon manually in the
+#   background, pull, then kill it. On the installed system systemd
+#   manages the daemon normally on first boot.
+#
+#   The `aiobi-ollama-firstpull.service` registered further down remains
+#   as a defensive fallback for any edge case where chroot-time pull
+#   fails silently — it re-attempts the pull on first boot post-install.
+#   With the chroot pull working, `ollama pull` is a no-op on already-
+#   present models and the marker file is touched harmlessly.
 
 # Wait for the daemon to be fully bound on 127.0.0.1:11434 before pulling.
-# systemctl is-active returns success on both "active" and "activating";
-# the API endpoint being reachable is the only reliable readiness signal.
 wait_for_ollama() {
-    local deadline=$(( $(date +%s) + 60 ))
+    local deadline=$(( $(date +%s) + $1 ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
         if curl -sf --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
             return 0
@@ -105,30 +123,79 @@ wait_for_ollama() {
     return 1
 }
 
-# Mode detection: /run/systemd/system is present exactly when systemd is
-# actually running (installed VM, live session). Its absence is the
-# canonical signal for a chroot environment where the daemon cannot be
-# started synchronously.
-if [ -d /run/systemd/system ] && wait_for_ollama; then
-    echo "  daemon is ready — pulling models now"
-    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen2.5:1.5b || echo "    ⚠ qwen2.5:1.5b pull failed"
-    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen3-vl:2b-instruct-q8_0   || echo "    ⚠ qwen3-vl:2b-instruct-q8_0 pull failed"
-elif [ -d /run/systemd/system ]; then
-    echo "  daemon did not become reachable within 60s on a live systemd host"
-    echo "  → check 'systemctl status ollama.service' + 'journalctl -u ollama.service -b'"
-    echo "  → re-run this script or invoke 'ollama pull qwen2.5:1.5b' manually once the endpoint responds"
-else
-    echo "  systemd not running (chroot mode) — registering first-boot pull service"
+OLLAMA_PID=""
 
-    # Deferred pull via a one-shot systemd service run on first boot.
-    # Ollama binary path: the upstream installer places the binary at
-    # /usr/local/bin/ollama, not /usr/bin/ollama. systemd requires an
-    # absolute path in ExecStart, so we detect the binary location at
-    # install time and inline it into the service unit.
-    OLLAMA_BIN=$(command -v ollama || echo /usr/local/bin/ollama)
-    tee /etc/systemd/system/aiobi-ollama-firstpull.service > /dev/null <<EOF
+# Path A: systemctl-managed daemon (already attempted at line above via
+# `systemctl restart ollama.service`). Give it 10 s to bind before we
+# fall through to the manual start.
+if wait_for_ollama 10; then
+    echo "  ollama daemon reachable via systemd — pulling at chroot time"
+else
+    # Path B: manual background daemon (chroot fallback).
+    echo "  ollama daemon not reachable via systemd — starting manually in background"
+    sudo -u ollama env \
+        HOME=/usr/share/ollama \
+        OLLAMA_HOST=127.0.0.1:11434 \
+        OLLAMA_MODELS=/usr/share/ollama/.ollama/models \
+        nohup ollama serve > /tmp/aiobi-ollama-chroot-serve.log 2>&1 &
+    OLLAMA_PID=$!
+    sleep 2
+    if ! wait_for_ollama 30; then
+        echo "  ⚠ ollama daemon did not bind within 30 s at chroot time"
+        echo "  → check /tmp/aiobi-ollama-chroot-serve.log"
+        echo "  → models will be pulled by aiobi-ollama-firstpull.service on first boot instead"
+    fi
+fi
+
+# If any daemon (Path A or B) is now bound, pull the two models.
+CHROOT_PULL_OK=0
+if curl -sf --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+    PULL_FAILED=0
+    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen2.5:1.5b \
+        || { echo "    ⚠ qwen2.5:1.5b pull failed"; PULL_FAILED=1; }
+    sudo -u ollama env HOME=/usr/share/ollama ollama pull qwen3-vl:2b-instruct-q8_0 \
+        || { echo "    ⚠ qwen3-vl:2b-instruct-q8_0 pull failed"; PULL_FAILED=1; }
+    if [ "$PULL_FAILED" -eq 0 ]; then
+        CHROOT_PULL_OK=1
+        echo "  models baked in at $(du -sh /usr/share/ollama/.ollama/models 2>/dev/null | cut -f1)"
+
+        # Touch the marker file so aiobi-ollama-firstpull.service skips on
+        # the installed system — chroot pull already covered both models,
+        # firstpull becomes truly a fallback that only activates on the
+        # edge case where chroot pull failed silently.
+        mkdir -p /var/lib
+        touch /var/lib/aiobi-ollama-firstpull-done
+        echo "  marker /var/lib/aiobi-ollama-firstpull-done touched — firstpull will skip on installed system"
+    fi
+fi
+
+# Clean up the manual background daemon (systemd manages the real one on
+# the installed system). No-op if Path A was used.
+if [ -n "$OLLAMA_PID" ]; then
+    kill "$OLLAMA_PID" 2>/dev/null || true
+    wait "$OLLAMA_PID" 2>/dev/null || true
+fi
+
+# --- Defensive first-boot fallback service --------------------------------
+# Always register the firstpull service — belt-and-suspenders for the
+# edge case where the chroot-time pull above failed silently. Uses an
+# absolute, filesystem-verified path (fix for the Jul 14 boot failure
+# where the service died with status=203/EXEC due to $OLLAMA_BIN
+# resolving to an empty or non-existent path).
+if [ -x /usr/local/bin/ollama ]; then
+    OLLAMA_BIN=/usr/local/bin/ollama
+elif [ -x /usr/bin/ollama ]; then
+    OLLAMA_BIN=/usr/bin/ollama
+else
+    # Should never reach here — the upstream installer places the binary
+    # at /usr/local/bin/ollama. Fall through with best-effort default.
+    OLLAMA_BIN=/usr/local/bin/ollama
+    echo "  ⚠ ollama binary not found at expected paths — firstpull service may fail with 203/EXEC"
+fi
+
+tee /etc/systemd/system/aiobi-ollama-firstpull.service > /dev/null <<EOF
 [Unit]
-Description=Aïobi OS — pull terminal SLM + desktop VLM on first boot
+Description=Aïobi OS — pull Qwen models on first boot (defensive fallback)
 Requires=network-online.target ollama.service
 After=network-online.target ollama.service
 ConditionPathExists=!/var/lib/aiobi-ollama-firstpull-done
@@ -148,12 +215,11 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-    systemctl enable aiobi-ollama-firstpull.service 2>/dev/null || \
-        ln -sf /etc/systemd/system/aiobi-ollama-firstpull.service \
-               /etc/systemd/system/multi-user.target.wants/aiobi-ollama-firstpull.service
+systemctl enable aiobi-ollama-firstpull.service 2>/dev/null || \
+    ln -sf /etc/systemd/system/aiobi-ollama-firstpull.service \
+           /etc/systemd/system/multi-user.target.wants/aiobi-ollama-firstpull.service
 
-    echo "  first-boot pull service enabled"
-fi
+echo "  firstpull fallback service registered (activates only if models are absent at first boot)"
 
 # ----- 4) Verification --------------------------------------------------------
 echo

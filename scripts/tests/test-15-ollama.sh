@@ -71,4 +71,36 @@ else
     skip "/usr/share/ollama ownership" "directory absent (daemon never started)"
 fi
 
+# 6. Models baked into the ISO (air-gapped install support). The chroot-time
+# pull in script 15 must have populated blobs for both Qwen models; on the
+# installed VM the same files are expected. Both manifests + at least one
+# blob per model must be present. If the blobs dir is empty or absent, the
+# pull did not complete and the air-gapped positioning is broken.
+MODELS_DIR=/usr/share/ollama/.ollama/models
+BLOBS_DIR="$MODELS_DIR/blobs"
+if [ -d "$BLOBS_DIR" ]; then
+    blob_count=$(find "$BLOBS_DIR" -maxdepth 1 -type f -name 'sha256-*' 2>/dev/null | wc -l)
+    if [ "$blob_count" -ge 6 ]; then
+        # Two Qwen models typically pull 4-6 blobs each (config + weights +
+        # tokenizer + template) — 6 total is the safe floor.
+        pass "$BLOBS_DIR has $blob_count blob file(s) (models baked in)"
+    else
+        fail "$BLOBS_DIR has enough blobs" "only $blob_count blob(s) — models not fully pulled"
+    fi
+
+    # Assert both model manifests are present so a partial pull is caught.
+    if [ -d "$MODELS_DIR/manifests/registry.ollama.ai/library/qwen2.5" ]; then
+        pass "manifest present: qwen2.5"
+    else
+        fail "manifest present: qwen2.5" "manifests/registry.ollama.ai/library/qwen2.5/ missing"
+    fi
+    if [ -d "$MODELS_DIR/manifests/registry.ollama.ai/library/qwen3-vl" ]; then
+        pass "manifest present: qwen3-vl"
+    else
+        fail "manifest present: qwen3-vl" "manifests/registry.ollama.ai/library/qwen3-vl/ missing"
+    fi
+else
+    fail "$BLOBS_DIR present" "blobs directory missing — models not pulled at chroot or first boot"
+fi
+
 finalize
