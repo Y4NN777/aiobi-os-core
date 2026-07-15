@@ -52,14 +52,23 @@ fi
 # Refresh apt index quietly; ignore failure (offline build host case)
 apt-get update -qq || true
 
-# ----- 1) Try apt package -----------------------------------------------------
-if apt-cache show gnome-shell-extension-dash-to-panel >/dev/null 2>&1; then
+# ----- 1) Try apt package (opportunistic — often absent in Ubuntu 24.04) ------
+# The dash-to-panel Debian package is not reliably present in Ubuntu 24.04
+# noble universe as an installable candidate (name may resolve in apt-cache
+# metadata via a related repo but have no downloadable version). Attempt
+# is guarded: any failure at either the show or the install step falls
+# through to the .zip fallback below rather than halting the pipeline.
+if apt-cache policy gnome-shell-extension-dash-to-panel 2>/dev/null \
+   | grep -q "Candidate: [0-9]"; then
     echo "  [apt] installing gnome-shell-extension-dash-to-panel"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gnome-shell-extension-dash-to-panel
-    # apt package installs to /usr/share/gnome-shell/extensions/<uuid> — verify
-    if [ ! -d "$SYSTEM_PATH" ]; then
-        echo "  WARN: apt install succeeded but $SYSTEM_PATH absent — falling through to .zip method"
+    if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        gnome-shell-extension-dash-to-panel 2>/dev/null; then
+        echo "  [apt] installed successfully"
+    else
+        echo "  [apt] install failed — falling through to .zip"
     fi
+else
+    echo "  [apt] no installable candidate — using .zip fallback"
 fi
 
 # ----- 2) Fallback — direct zip download -------------------------------------
