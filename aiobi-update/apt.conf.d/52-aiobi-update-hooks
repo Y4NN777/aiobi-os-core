@@ -6,14 +6,11 @@
 // `aiobi-update --log`). This keeps one audit trail for "what changed
 // the package set" regardless of which tool triggered it.
 //
-// Both hooks are guarded (`test -x ... && ... || true`) so a missing
-// binary or a read-only /var/log never turns into a broken apt
-// transaction — hooks must never fail the transaction they observe.
+// The hooks delegate to a shell script rather than inline shell to
+// sidestep APT config parser edge cases with nested \" and $() —
+// the previous inline form failed with "Extra junk after value".
+// The script itself swallows errors so a broken log dir never
+// fails the apt transaction it observes.
 
-DPkg::Pre-Invoke {
-    "test -x /usr/local/bin/aiobi-update && echo \"$(date -u +%FT%TZ) apt/dpkg transaction starting (uid=$(id -u))\" >> /var/log/aiobi-update.log 2>/dev/null || true";
-};
-
-DPkg::Post-Invoke {
-    "test -x /usr/local/bin/aiobi-update && echo \"$(date -u +%FT%TZ) apt/dpkg transaction finished\" >> /var/log/aiobi-update.log 2>/dev/null || true";
-};
+DPkg::Pre-Invoke  { "/usr/local/lib/aiobi-update/hook.sh pre";  };
+DPkg::Post-Invoke { "/usr/local/lib/aiobi-update/hook.sh post"; };

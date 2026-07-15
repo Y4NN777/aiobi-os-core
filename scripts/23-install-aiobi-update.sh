@@ -80,6 +80,7 @@ SRC_CONF="$SRC_DIR/update.conf"
 SRC_SYSTEMD_SYSTEM="$SRC_DIR/systemd/system"
 SRC_SYSTEMD_USER="$SRC_DIR/systemd/user"
 SRC_APT_HOOK="$SRC_DIR/apt.conf.d/52-aiobi-update-hooks"
+SRC_HOOK_SCRIPT="$SRC_DIR/hook.sh"
 SRC_LOGROTATE="$SRC_DIR/logrotate.d/aiobi-update"
 SRC_PIN="$SRC_DIR/no-ubuntu-updater.pref"
 
@@ -91,9 +92,10 @@ LIB_DIR=/usr/local/lib/aiobi-update
 [ -f "$SRC_CONF" ] || { echo "ERROR: $SRC_CONF missing"; exit 2; }
 [ -d "$SRC_SYSTEMD_SYSTEM" ] || { echo "ERROR: $SRC_SYSTEMD_SYSTEM missing"; exit 2; }
 [ -d "$SRC_SYSTEMD_USER" ]   || { echo "ERROR: $SRC_SYSTEMD_USER missing"; exit 2; }
-[ -f "$SRC_APT_HOOK" ]  || { echo "ERROR: $SRC_APT_HOOK missing"; exit 2; }
-[ -f "$SRC_LOGROTATE" ] || { echo "ERROR: $SRC_LOGROTATE missing"; exit 2; }
-[ -f "$SRC_PIN" ]       || { echo "ERROR: $SRC_PIN missing"; exit 2; }
+[ -f "$SRC_APT_HOOK" ]     || { echo "ERROR: $SRC_APT_HOOK missing"; exit 2; }
+[ -f "$SRC_HOOK_SCRIPT" ]  || { echo "ERROR: $SRC_HOOK_SCRIPT missing"; exit 2; }
+[ -f "$SRC_LOGROTATE" ]    || { echo "ERROR: $SRC_LOGROTATE missing"; exit 2; }
+[ -f "$SRC_PIN" ]          || { echo "ERROR: $SRC_PIN missing"; exit 2; }
 
 # ----- 2) Purge conflicting Ubuntu native update GUIs -----------------------
 # Ubuntu ships update-manager (the "Software Updater" popup) and
@@ -156,11 +158,12 @@ install -m 0644 "$SRC_SYSTEMD_USER/aiobi-update-notify.path" /etc/systemd/user/a
 install -m 0644 "$SRC_SYSTEMD_USER/aiobi-update-notify.service" /etc/systemd/user/aiobi-update-notify.service
 echo "  installed user units: aiobi-update-notify.path, aiobi-update-notify.service"
 
-# ----- 8) APT hook + logrotate + pin -------------------------------------------
+# ----- 8) APT hook + hook helper + logrotate + pin -----------------------------
 install -m 0644 "$SRC_APT_HOOK" /etc/apt/apt.conf.d/52-aiobi-update-hooks
+install -m 0755 "$SRC_HOOK_SCRIPT" "$LIB_DIR/hook.sh"
 install -m 0644 "$SRC_LOGROTATE" /etc/logrotate.d/aiobi-update
 install -m 0644 "$SRC_PIN" /etc/apt/preferences.d/no-ubuntu-updater.pref
-echo "  installed apt hook, logrotate config, and no-ubuntu-updater.pref"
+echo "  installed apt hook, hook helper, logrotate config, and no-ubuntu-updater.pref"
 
 # ----- 9) Byte-compile ---------------------------------------------------------
 python3 -c "import py_compile; py_compile.compile('/usr/local/bin/aiobi-update', doraise=True)" \
