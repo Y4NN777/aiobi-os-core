@@ -41,6 +41,23 @@ fi
 # Also root's if any
 [[ -d /root/snap ]] && rm -rf /root/snap
 
+# Live-CD squashfs residue. The vanilla Ubuntu 24.04 live session runs
+# snapd as the `ubuntu` user, which populates
+# /home/ubuntu/snap/snapd-desktop-integration/ with a full runtime tree
+# (font caches, GTK immodules, GIO modules). When Cubic captures the
+# live squashfs, that tree is packed into the ISO and Subiquity replicates
+# it into every freshly-created user home on install — visible on the
+# installed system as `~/snap/snapd-desktop-integration/` even though
+# no snapd process ever ran there.
+#
+# In a chroot the `ubuntu` user home may still be present; glob-purge
+# everything under /home/*/snap AND remove the OEM live-CD user home
+# entirely. Also purge /etc/skel/snap in case a future Ubuntu base image
+# adds a skel stub for it.
+rm -rf /home/*/snap 2>/dev/null || true
+rm -rf /home/ubuntu 2>/dev/null || true
+rm -rf /etc/skel/snap 2>/dev/null || true
+
 # --- 2. APT pin — refuse snapd reinstall via dependency chain ----------------
 tee /etc/apt/preferences.d/nosnap.pref > /dev/null << 'EOF'
 # Aïobi OS — block snapd reinstallation via dependency chain.

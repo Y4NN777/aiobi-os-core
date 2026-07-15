@@ -2,13 +2,17 @@
 # ============================================================================
 # Aïobi OS — Step 13 — Productivity stack
 # ----------------------------------------------------------------------------
-# Purpose : install the default productivity application set:
-#           OnlyOffice (.deb from vendor), Brave (vendor apt repo),
-#           VLC + Flameshot (Ubuntu universe), PeaZip + AppFlowy + Obsidian (Flatpak
-#           from Flathub, as neither is packaged natively in Ubuntu 24.04).
+# Purpose : purge Ubuntu 24.04's pre-installed LibreOffice suite, then
+#           install the Aïobi productivity application set:
+#             OnlyOffice (.deb from vendor) as the primary office suite,
+#             Brave (vendor apt repo) as alternate browser,
+#             VLC + Flameshot (Ubuntu universe),
+#             PeaZip + AppFlowy + Obsidian (Flatpak from Flathub, none
+#             packaged natively in Ubuntu 24.04).
 #
-# Delivers : OnlyOffice as default .docx handler, Brave as alternate browser,
-#            VLC + Flameshot + PeaZip + AppFlowy pre-installed.
+# Delivers : OnlyOffice as sole and default .docx handler, Brave as
+#            alternate browser, VLC + Flameshot + PeaZip + AppFlowy +
+#            Obsidian pre-installed.
 #
 # Non-interactive apt caveat
 #   OnlyOffice's postinst script exposes an interactive EULA that blocks
@@ -33,6 +37,18 @@ set -euo pipefail
 # blocks apt install -y otherwise).
 export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
+
+# --- 0. Purge LibreOffice ---------------------------------------------------
+# Ubuntu 24.04 desktop pre-installs the full LibreOffice suite (~600 MB
+# of core + ~200 MB of dictionaries and translation packs). Aïobi ships
+# OnlyOffice as the primary office suite; shipping both in parallel is
+# redundant, inflates the ISO, and populates the GNOME app grid with
+# duplicate Writer / Calc / Impress / Draw / Math / Startcenter entries.
+# Purge LibreOffice and its language/hyphenation dependencies before
+# installing OnlyOffice so the ISO ships exactly one office suite.
+apt-get purge -y 'libreoffice-*' 'mythes-*' 'hyphen-*' \
+    'libuno-*' uno-libs-private ure 2>/dev/null || true
+apt-get autoremove -y --purge 2>/dev/null || true
 
 # --- 1. OnlyOffice (vendor .deb, no maintained PPA for 24.04) ---------------
 OO_DEB=/tmp/onlyoffice-desktopeditors.deb
