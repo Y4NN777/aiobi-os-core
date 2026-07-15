@@ -4,27 +4,32 @@
 # =============================================================================
 # Purpose : run every customization script in the correct dependency order
 #           for a fresh chroot pass under Cubic. Copy this scripts/ directory
-#           into the chroot terminal, run `bash 14-run-all.sh`, then let
+#           into the chroot terminal, run `bash run-all.sh`, then let
 #           Cubic generate the ISO.
 #
 # Ordering rationale
-#   01 install-extensions    dash-to-panel + gnome-shell-extensions
-#   02 configure-panel       dconf keyfile shipped
-#   03 inject-theme          Aïobi GTK theme (full Yaru clone + sed)
-#   04 install-icons         Papirus + Papirus-Dark + Aïobi placeholders
-#   05 rebrand-os            os-release + hostname + GRUB + MOTD + first-boot
-#   08 inject-shell-theme    Aïobi gnome-shell theme (needs 01's user-theme)
-#   09 terminal-profile      gnome-terminal Aïobi palette
-#   10 snap-final-purge      APT pin nosnap + residue cleanup
-#   11 apt-brand-alias       mirror.aiobi.local (DEB822 + /etc/hosts)
-#   12 wine-proton-install   Wine + GE-Proton + MIME associations
-#   13 productivity-stack    OnlyOffice + Brave + VLC + Flameshot + Flatpaks
-#   15 install-ollama        Ollama daemon + Qwen 2.5 models (loopback)
-#   17 install-ai-cli        aiobi-ai CLI + Bash/Zsh integration
-#   18 install-anythingllm   AnythingLLM AppImage + skel default config
-#   19 tune-ram              zRAM swap + Ollama socket activation
-#   06 apply-persistence     dconf locks + skel + fonts — LAST (seals state)
-#   07 validate              PASS/FAIL check against acceptance criteria
+#   01 install-extensions              dash-to-panel + gnome-shell-extensions
+#   02 configure-panel                 dconf keyfile shipped
+#   03 inject-theme                    Aïobi GTK theme (Yaru clone + sed)
+#   04 install-icons                   Papirus + Papirus-Dark + Aïobi placeholders
+#   05 rebrand-os                      os-release + hostname + GRUB + MOTD + first-boot
+#   08 inject-shell-theme              Aïobi gnome-shell theme (needs 01's user-theme)
+#   10 snap-final-purge                APT pin nosnap + residue cleanup
+#   11 apt-brand-alias                 mirror.aiobi.local (DEB822 + /etc/hosts)
+#   12 wine-proton-install             Wine + GE-Proton + MIME associations
+#   13 productivity-stack              OnlyOffice + Brave + VLC + Flameshot + Flatpaks
+#   15 install-ollama                  Ollama daemon + first-boot model pull (loopback)
+#   17 install-aiobi-term              aiobi-term CLI + knowledge package + shell integration
+#   18 install-anythingllm             AnythingLLM Desktop AppImage
+#   19 tune-ram                        zRAM swap + Ollama socket activation
+#   20 ai-firewall                     iptables/ip6tables OUTPUT REJECT :11434 non-loopback
+#   21 configure-bash-completion       TAB menu-complete + argcomplete + skel setup
+#   06 apply-persistence               dconf locks + skel + fonts — LAST (seals state)
+#   09 terminal-profile                gnome-terminal Aïobi palette (verifies compiled db)
+#   07 validate                        PASS/FAIL check against acceptance criteria
+#
+# The orchestrator itself has no numeric prefix on purpose — it is not
+# a step, it is the entry point that chains the steps above.
 #
 # Chroot mode note : steps that require a live D-Bus session (gnome-
 # extensions enable, dconf writes to per-user) are silently skipped inside
@@ -86,6 +91,12 @@ run_step 17-install-aiobi-term.sh
 run_step 18-install-anythingllm.sh
 run_step 19-tune-ram.sh
 run_step 20-ai-firewall.sh
+
+# UX layer — terminal auto-completion (TAB menu-complete + Shift+TAB backward
+# + argcomplete). Written into /etc/skel/.bashrc so it lands in every future
+# user's shell. Placed before 06-apply-persistence.sh because 06 copies skel
+# into the sealed image state.
+run_step 21-configure-bash-completion.sh
 
 # Persistence — dconf profile + keyfiles (branding, wallpaper, panel, terminal)
 # + locks + /etc/skel. This step installs every system dconf keyfile and
