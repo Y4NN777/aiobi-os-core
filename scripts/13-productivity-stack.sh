@@ -38,16 +38,36 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
 
-# --- 0. Purge LibreOffice ---------------------------------------------------
-# Ubuntu 24.04 desktop pre-installs the full LibreOffice suite (~600 MB
-# of core + ~200 MB of dictionaries and translation packs). Aïobi ships
-# OnlyOffice as the primary office suite; shipping both in parallel is
-# redundant, inflates the ISO, and populates the GNOME app grid with
-# duplicate Writer / Calc / Impress / Draw / Math / Startcenter entries.
-# Purge LibreOffice and its language/hyphenation dependencies before
-# installing OnlyOffice so the ISO ships exactly one office suite.
-apt-get purge -y 'libreoffice-*' 'mythes-*' 'hyphen-*' \
-    'libuno-*' uno-libs-private ure 2>/dev/null || true
+# --- 0. Purge redundant Ubuntu 24.04 default apps ---------------------------
+# Ubuntu 24.04 desktop pre-installs several applications whose role
+# Aïobi covers with its own picks, or that clash with the OS positioning;
+# shipping them in parallel is redundant, inflates the ISO, and
+# populates the GNOME app grid with duplicate entries.
+#
+#   - LibreOffice full suite (~600 MB core + ~200 MB l10n / dictionaries) —
+#     superseded by OnlyOffice as the sole office suite.
+#   - Rhythmbox and its plugin ecosystem — audio playback and library
+#     management is already covered by VLC (installed below).
+#   - Shotwell (~150 MB) — photo library manager superseded by the
+#     GNOME Image Viewer already shipped with GNOME 46 for viewing.
+#   - Transmission (torrent client) — off-brand for the AI-native
+#     productivity positioning; retained apps like Remmina and
+#     Simple-Scan stay because they cover niche but legitimate
+#     professional workflows without a shipped alternative.
+#
+# NOT purged (intentional): evolution-data-server (calendar/contacts
+# backend used by GNOME Shell, purging it would break GNOME Online
+# Accounts), deja-dup (backup — no alternative shipped),
+# remmina (RDP/VNC client — no alternative), simple-scan.
+#
+# Purge everything before installing the Aïobi productivity picks so
+# the resulting ISO ships exactly one app per role.
+apt-get purge -y \
+    'libreoffice-*' 'mythes-*' 'hyphen-*' 'libuno-*' uno-libs-private ure \
+    'rhythmbox*' \
+    'shotwell*' \
+    'transmission-*' \
+    2>/dev/null || true
 apt-get autoremove -y --purge 2>/dev/null || true
 
 # --- 1. OnlyOffice (vendor .deb, no maintained PPA for 24.04) ---------------
