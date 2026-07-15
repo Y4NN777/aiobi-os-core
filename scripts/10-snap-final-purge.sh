@@ -85,7 +85,10 @@ apt-get update -qq || true
 # --- 5. Verification ---------------------------------------------------------
 echo "== Verification =="
 echo "== apt-cache policy snapd =="
-apt-cache policy snapd 2>&1 | head -6
+# Capture into a variable first so head does not close the pipe and send
+# SIGPIPE upstream (would make pipefail exit 141 kill the pipeline).
+POLICY_OUT=$(apt-cache policy snapd 2>&1 || true)
+printf '%s\n' "$POLICY_OUT" | sed -n '1,6p'
 echo
 echo "== residual /snap /var/snap /var/cache/snapd =="
 for d in /snap /var/snap /var/cache/snapd; do
