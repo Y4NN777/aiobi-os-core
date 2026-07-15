@@ -27,12 +27,12 @@
 #     returns a suggestion, aiobi-term prints it, and the user decides
 #     whether to run it. aiobi-term itself does NOT execute the suggestion.
 #   * destructive-pattern guardrail: the CODE_SYSTEM prompt asks the
-#     model to prefix destructive suggestions with '# '. A 1.5B model
-#     does not always comply. When the stripped output matches a known
-#     dangerous pattern (rm -rf, dd of=/dev/, mkfs, chmod 777 /, fork
-#     bomb, curl | sh, etc.) and is not already commented, do_command
-#     REPLACES the output with a warning line. Zero accidental
-#     execution of a paste from aiobi-term.
+#     model to emit destructive suggestions as two lines — a '# ' warning
+#     followed by the actual command — so the user sees both the risk
+#     and the command. When the model omits the warning and the output
+#     matches a known dangerous pattern (rm -rf, dd of=/dev/, mkfs,
+#     chmod 777 /, fork bomb, curl | sh, etc.), do_command PREPENDS a
+#     '# WARNING' line so the risk is always visible above the command.
 
 import argparse
 import json
@@ -60,9 +60,10 @@ CODE_SYSTEM = (
     "Prefer modern Ubuntu 24.04 tools over deprecated ones: use ss "
     "instead of netstat, ip instead of ifconfig, dig instead of "
     "nslookup, journalctl instead of tailing /var/log directly. "
-    "If the request is destructive or ambiguous, output a single line "
-    "starting with '# ' followed by a one-sentence warning instead of "
-    "a command.\n"
+    "If the request is destructive or ambiguous, output TWO lines: "
+    "first a warning line starting with '# ' and a one-sentence "
+    "justification, then the actual shell command on the second line. "
+    "The user sees the warning AND has the command ready to review.\n"
     "\n"
     "Examples:\n"
     "Request: list every running service\n"
@@ -79,12 +80,15 @@ CODE_SYSTEM = (
     "\n"
     "Request: delete every log file in /var/log\n"
     "Command: # destructive; wholesale removal of /var/log breaks audit trails, name the specific file first\n"
+    "rm -rf /var/log/*.log\n"
     "\n"
     "Request: format /dev/sda\n"
     "Command: # destructive; run lsblk first, confirm the target device, then use mkfs with the intended filesystem\n"
+    "mkfs.ext4 /dev/sda\n"
     "\n"
     "Request: wipe the second disk with zeros\n"
-    "Command: # destructive; dd of=/dev/<device> is unrecoverable, verify with lsblk that no partitions are mounted"
+    "Command: # destructive; dd of=/dev/<device> is unrecoverable, verify with lsblk that no partitions are mounted\n"
+    "dd if=/dev/zero of=/dev/sdb bs=1M status=progress"
 )
 
 CMD_DECODING_OPTIONS = {
@@ -189,31 +193,39 @@ def strip_fences(text: str) -> str:
         text = text[2:]
     elif text.startswith("$"):
         text = text[1:].lstrip()
-    # A chat-tuned model sometimes prefaces the command with a sentence
-    # or trails it with commentary despite the strict system prompt. The
-    # CODE_SYSTEM contract is one line, so we take the first non-empty
-    # one — the '# warning' case is preserved because it is itself the
-    # first line.
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if stripped:
-            return stripped
-    return text
+    # The CODE_SYSTEM contract allows two shapes:
+    #   1. a single command line (most requests)
+    #   2. a warning line starting with '#' followed by the actual
+    #      command line (destructive / ambiguous requests)
+    # In shape 1, take the first non-empty line and drop any trailing
+    # prose. In shape 2, preserve both lines — the user sees the
+    # warning AND has the command to review.
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+    if not lines:
+        return text
+    if lines[0].startswith("#") and len(lines) >= 2:
+        return f"{lines[0]}\n{lines[1]}"
+    return lines[0]
 
 
 def do_command(request: str) -> None:
     response = call_ollama(CODE_SYSTEM, request, options=CMD_DECODING_OPTIONS)
     cmd = strip_fences(response)
-    reason = is_destructive(cmd)
-    if reason:
-        print(
-            f"# WARNING: destructive pattern detected ({reason}). "
-            f"aiobi-term will not print the raw command. Rephrase the "
-            f"request to be more specific, or type the command manually "
-            f"after verifying the target."
-        )
-    else:
-        print(cmd)
+    # Safety net: if the model returned a raw destructive command with
+    # no leading '# ' warning, prepend one so the user always sees the
+    # risk before the command line — the command is still printed and
+    # copy-runnable, but the '#' line above it is a shell comment that
+    # makes the intent visible.
+    lines = cmd.split("\n")
+    first_line = lines[0].lstrip()
+    if not first_line.startswith("#"):
+        reason = is_destructive(cmd)
+        if reason:
+            print(
+                f"# WARNING: destructive pattern detected ({reason}). "
+                f"Review the target and consequences before running."
+            )
+    print(cmd)
 
 
 def do_chat(question: str) -> None:

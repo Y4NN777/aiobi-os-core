@@ -16,13 +16,13 @@ conversation with a local language model.
   the suggestion; the user decides whether to run it. `aiobi-term`
   itself never executes shell commands.
 - **Destructive-pattern guardrail.** The CODE_SYSTEM prompt asks the
-  model to prefix destructive suggestions with `# `. Because a 1.5B
-  model does not always comply, `do_command` runs a regex safety net
-  after `strip_fences()`: any output matching a known dangerous
-  pattern (`rm -rf`, `dd of=/dev/`, `mkfs`, `chmod 777 /`, recursive
-  `chown` on system paths, `shutdown`, fork bomb, `curl … | sh`, etc.)
-  is *replaced* with a warning comment. Zero accidental execution of
-  a paste from `aiobi-term`.
+  model to emit destructive suggestions as *two lines* — a `# ` warning
+  first, then the actual command — so the user sees both the risk and
+  the command ready to review. When the model omits the warning and
+  the output matches a known dangerous pattern (`rm -rf`, `dd of=/dev/`,
+  `mkfs`, `chmod 777 /`, recursive `chown` on system paths, `shutdown`,
+  fork bomb, `curl … | sh`, etc.), `do_command` **prepends** a
+  `# WARNING` line above the raw command so the risk is always visible.
 
 ## Files
 
