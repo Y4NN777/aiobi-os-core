@@ -15,6 +15,14 @@ conversation with a local language model.
 - **Human confirmation for every command.** `aiobi-term --cmd` prints
   the suggestion; the user decides whether to run it. `aiobi-term`
   itself never executes shell commands.
+- **Software-intelligence recovery loop.** `--explain` closes the
+  feedback loop when the model gets a suggestion wrong: the user runs
+  the suggested command, it fails, and `aiobi-term --explain "<cmd>"`
+  (or `Ctrl-X Ctrl-H` on the last history entry) asks the chat model
+  to reason about the likely failure cause on Ubuntu 24.04 and propose
+  a corrected alternative. No re-execution — the model reasons from
+  the command shape alone, so there is no risk of triggering side
+  effects again.
 - **Destructive-pattern guardrail.** The CODE_SYSTEM prompt asks the
   model to emit destructive suggestions as *two lines* — a `# ` warning
   first, then the actual command — so the user sees both the risk and
@@ -43,11 +51,16 @@ aiobi-term "What is systemd, in one sentence?"
 # Shell-command suggestion (deterministic decoding + few-shot prompt)
 aiobi-term --cmd "list all listening TCP ports"
 
+# Explain why a shell command failed and propose an alternative
+aiobi-term --explain "netstat -tuln"
+
 # Interactive chat REPL
 aiobi-term --chat
 
 # Ctrl-X Ctrl-A on a natural-language input line
 # → prints a shell-command suggestion below the prompt
+# Ctrl-X Ctrl-H after a failed command
+# → prints a one-sentence explanation + a corrected alternative
 ```
 
 ## Model choice

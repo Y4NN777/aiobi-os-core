@@ -7,6 +7,10 @@
 #   aiobi-term "<question>"          conversational   (chat system prompt)
 #   aiobi-term --cmd "<request>"     shell command    (cmd system prompt +
 #                                                     deterministic decoding)
+#   aiobi-term --explain "<cmd>"     failure analysis (chat with explain
+#                                                     system prompt, no
+#                                                     re-execution of the
+#                                                     command)
 #   aiobi-term --chat                interactive REPL
 #
 # Model
@@ -50,6 +54,22 @@ CHAT_SYSTEM = (
     "You are the Aïobi terminal assistant, the built-in AI of Aïobi OS. "
     "Answer the user's question concisely and in the language they used. "
     "If they ask about system administration, prefer Ubuntu 24.04 conventions."
+)
+
+EXPLAIN_SYSTEM = (
+    "You help the user understand why a shell command may have failed or "
+    "may not work on Ubuntu 24.04 (GNOME 46, systemd). Given a command "
+    "they ran, briefly explain the likely cause of the failure and "
+    "propose one corrected one-liner alternative. Reply in the language "
+    "the user writes. Keep the answer to at most three short sentences. "
+    "Use this format:\n"
+    "  Line 1: what went wrong (one sentence)\n"
+    "  Line 2: 'Try: ' followed by the corrected shell command (no fence, "
+    "no backticks, no leading '$')\n"
+    "If the command looks correct for Ubuntu 24.04 and no failure mode "
+    "is apparent, say so briefly instead of inventing a bug. Prefer "
+    "modern tools: ss over netstat, ip over ifconfig, dig over nslookup, "
+    "journalctl over tailing /var/log."
 )
 
 CODE_SYSTEM = (
@@ -233,6 +253,19 @@ def do_chat(question: str) -> None:
     print(response)
 
 
+def do_explain(command: str) -> None:
+    """Software-intelligence wrapper: the user pastes (or the shell
+    integration passes) a shell command that failed or that they suspect
+    will fail. The chat model reasons about the failure mode on Ubuntu
+    24.04 and proposes a corrected alternative. No re-execution: the
+    model reasons from the command shape alone, which is safe (no side
+    effects) and enough to catch the common failure modes (deprecated
+    tools, missing packages, wrong flags, permission issues)."""
+    prompt = f"The following shell command was just run on Ubuntu 24.04 and failed or is expected to fail:\n\n    {command}\n\nExplain the likely cause and propose a corrected alternative."
+    response = call_ollama(EXPLAIN_SYSTEM, prompt)
+    print(response)
+
+
 def do_repl() -> None:
     print("aiobi-term — interactive chat. Type 'exit' to quit.")
     print(f"             (uses {MODEL} on 127.0.0.1:11434)")
@@ -261,6 +294,10 @@ def main() -> int:
                         help="Return a shell command suggestion instead of a chat answer.")
     parser.add_argument("--chat", action="store_true",
                         help="Start an interactive chat REPL.")
+    parser.add_argument("--explain", action="store_true",
+                        help="Explain why a shell command may have failed on "
+                             "Ubuntu 24.04 and propose a corrected alternative. "
+                             "Pass the failing command as the argument.")
     parser.add_argument("prompt", nargs="*",
                         help="The question or request. Read from stdin if empty.")
     args = parser.parse_args()
@@ -279,6 +316,8 @@ def main() -> int:
 
     if args.cmd:
         do_command(request)
+    elif args.explain:
+        do_explain(request)
     else:
         do_chat(request)
     return 0
