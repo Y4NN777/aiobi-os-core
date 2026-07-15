@@ -1,12 +1,19 @@
 # aiobi_update.popup — GTK4 + libadwaita interactive popups.
 #
-# Exactly three popup types, per the agreed scope — no more:
+# Four popup functions, per the agreed scope:
 #   1. confirm(n)                     — before --apply (interactive only;
 #                                        skipped by --apply -y)
 #   2. run_with_progress(worker)      — during --apply, worker runs on a
 #                                        background thread while a
 #                                        Gtk.ProgressBar pulses
 #   3. summary(succeeded, failed, ..) — after --apply completes
+#   4. run_with_progress_stream(proc) — during the pkexec apply path:
+#                                        a determinate Gtk.ProgressBar
+#                                        driven by AIOBI-PROGRESS/
+#                                        AIOBI-DONE markers read from an
+#                                        already-started subprocess's
+#                                        stdout (apply-helper.sh, run
+#                                        elevated via pkexec)
 #
 # Each popup is its own short-lived Adw.Application so the process
 # exits as soon as the dialog is dismissed — aiobi-update is a CLI
@@ -14,6 +21,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 import threading
 from dataclasses import dataclass
 
@@ -24,11 +33,19 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Gdk, GLib  # noqa: E402
 
 APP_ID_PREFIX = "org.aiobi.Update"
+REBOOT_REQUIRED_FLAG = "/var/run/reboot-required"
 
 CSS = b"""
 .aiobi-accent { color: #7233CD; }
 .aiobi-primary { background: #7233CD; color: #F8F8F9; }
 """
+
+# apply-helper.sh's stdout contract (kept in sync with
+# aiobi-update/apply-helper.sh's AIOBI-PROGRESS / AIOBI-FAILED /
+# AIOBI-DONE markers).
+_PROGRESS_RE = re.compile(r"^AIOBI-PROGRESS:\s*(\d+)/(\d+)\s+(\S+)")
+_FAILED_RE = re.compile(r"^AIOBI-FAILED:\s*(\S+)")
+_DONE_RE = re.compile(r"^AIOBI-DONE:\s*succeeded=(\d+)\s+failed=(\d+)")
 
 
 def _apply_aiobi_css() -> None:
@@ -159,6 +176,118 @@ def run_with_progress(worker) -> ApplyResult:
     app.connect("activate", on_activate)
     app.run(None)
     return result_holder["result"]
+
+
+def run_with_progress_stream(process) -> ApplyResult:
+    """Show a determinate progress window driven by an already-started
+    `subprocess.Popen` (stdout=PIPE, stderr=STDOUT, text=True) — the
+    pkexec'd apply-helper.sh in aiobi_update.cli.cmd_apply_pkexec.
+
+    A background thread reads `process.stdout` line by line (blocking
+    reads are fine on that thread; GTK never touches it directly) and
+    marshals each parsed line onto the GTK main thread via
+    `GLib.idle_add`, exactly like run_with_progress marshals its worker
+    thread's result. Recognised markers:
+        AIOBI-PROGRESS: <n>/<total> <pkgname>   -> advance the bar,
+                                                    update the label
+        AIOBI-FAILED: <pkgname>                 -> counted into the
+                                                    final ApplyResult
+                                                    if AIOBI-DONE never
+                                                    arrives
+        AIOBI-DONE: succeeded=<n> failed=<m>    -> closes the window
+                                                    with the final
+                                                    ApplyResult
+
+    If the helper's stdout closes without an AIOBI-DONE line (crash,
+    killed, pkexec itself failing before exec), the window still
+    closes and an ApplyResult is still returned — with the packages
+    seen via AIOBI-FAILED (if any) and an explicit "unknown" marker so
+    the caller can distinguish this from a clean run. reboot_required
+    is read directly from /var/run/reboot-required rather than trusted
+    from the helper, since a crashed helper cannot report it."""
+    result_holder: dict[str, ApplyResult] = {}
+    failed_seen: list[str] = []
+
+    def on_activate(app: Adw.Application) -> None:
+        _apply_aiobi_css()
+        window = Adw.ApplicationWindow(application=app, title="Aïobi OS Update")
+        window.set_default_size(440, 150)
+        window.set_deletable(False)
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar(show_end_title_buttons=False, show_start_title_buttons=False)
+        toolbar.add_top_bar(header)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
+                       margin_top=24, margin_bottom=24, margin_start=24, margin_end=24)
+        label = Gtk.Label(label="Applying updates…", wrap=True)
+        label.add_css_class("aiobi-accent")
+        box.append(label)
+
+        progress = Gtk.ProgressBar(show_text=True)
+        box.append(progress)
+
+        toolbar.set_content(box)
+        window.set_content(toolbar)
+        window.present()
+
+        def finish() -> bool:
+            reboot_required = os.path.exists(REBOOT_REQUIRED_FLAG)
+            if "outcome" not in result_holder:
+                # stdout closed with no AIOBI-DONE line: helper crashed
+                # or was killed before it could report.
+                result_holder["outcome"] = ApplyResult(
+                    [], failed_seen or ["unknown"], reboot_required
+                )
+            app.quit()
+            return False
+
+        def on_line(line: str) -> None:
+            match_progress = _PROGRESS_RE.match(line)
+            if match_progress:
+                n, total, pkgname = match_progress.groups()
+                n, total = int(n), int(total)
+                fraction = n / total if total else 0.0
+                progress.set_fraction(fraction)
+                progress.set_text(f"Installing {pkgname} ({n}/{total})")
+                return
+
+            match_failed = _FAILED_RE.match(line)
+            if match_failed:
+                failed_seen.append(match_failed.group(1))
+                return
+
+            match_done = _DONE_RE.match(line)
+            if match_done:
+                succ_n, fail_n = int(match_done.group(1)), int(match_done.group(2))
+                reboot_required = os.path.exists(REBOOT_REQUIRED_FLAG)
+                # AIOBI-DONE carries only counts. Failed package names
+                # come from the AIOBI-FAILED lines accumulated above
+                # (real names, used verbatim by cli.py's summary print
+                # and popup.summary()'s "Failed: " line); succeeded
+                # names are never individually reported by the helper,
+                # so a length-succ_n placeholder list is used — every
+                # caller only needs len(succeeded), never the names.
+                result_holder["outcome"] = ApplyResult(
+                    ["<applied>"] * succ_n,
+                    failed_seen if failed_seen else ["<unknown>"] * fail_n,
+                    reboot_required,
+                )
+
+        def read_stdout() -> None:
+            try:
+                for raw_line in process.stdout:
+                    line = raw_line.rstrip("\n")
+                    GLib.idle_add(on_line, line)
+            finally:
+                GLib.idle_add(finish)
+
+        threading.Thread(target=read_stdout, daemon=True).start()
+
+    app = Adw.Application(application_id=f"{APP_ID_PREFIX}.ProgressStream")
+    app.connect("activate", on_activate)
+    app.run(None)
+    return result_holder["outcome"]
 
 
 def summary(succeeded: list[str], failed: list[str], reboot_required: bool) -> None:

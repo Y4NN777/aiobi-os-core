@@ -14,6 +14,12 @@
 #                     silent notification and count > 0
 #   --apply [-y]      confirm (GTK, unless -y) -> progress (GTK) -> apply
 #                     -> summary (GTK, unless policy disables it)
+#                     when run as a normal user with a GUI session and
+#                     neither --security-only nor -y is given, this
+#                     dispatches to the pkexec path instead (see
+#                     cmd_apply_pkexec): confirm (GTK) -> pkexec
+#                     apply-helper.sh -> polkit auth prompt -> progress
+#                     (GTK, streamed from the helper's stdout) -> summary
 #   --apply --security-only [-y]
 #                     internal path used by aiobi-update-apply.service when
 #                     triggered by aiobi-update-security.timer (see
@@ -52,6 +58,11 @@ EXIT_LOCK_HELD = 3
 EXIT_CONFIG_ERROR = 10
 
 _DEFER_PATTERN = re.compile(r"^(\d+)\s*([hHdD])$")
+
+# Installed by scripts/23-install-aiobi-update.sh alongside
+# /usr/share/polkit-1/actions/com.aiobi.update.policy, which declares
+# the com.aiobi.update.apply action pointed at this exact path.
+PKEXEC_HELPER = "/usr/local/lib/aiobi-update/apply-helper.sh"
 
 
 def _has_gui() -> bool:
@@ -213,6 +224,15 @@ def _do_apply(pol, packages: list[str], assume_yes: bool, show_gui: bool):
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
+    # PKEXEC MODE gate: user (non-root) with a reachable GUI session,
+    # asking for a plain interactive apply (no --security-only, no -y).
+    # This is the path that closes the "must open a terminal" UX gap —
+    # everything else (security-only overnight timer, explicit sudo +
+    # TTY, -y non-interactive) keeps its existing root-required flow.
+    import os
+    if not args.security_only and not args.yes and _has_gui() and os.geteuid() != 0:
+        return cmd_apply_pkexec(args)
+
     rc = _require_root("--apply", "aiobi-update --apply")
     if rc is not None:
         return rc
@@ -223,32 +243,44 @@ def cmd_apply(args: argparse.Namespace) -> int:
         print(f"aiobi-update: config error: {exc}", file=sys.stderr)
         return EXIT_CONFIG_ERROR
 
-    show_gui = not args.yes
-
     if args.security_only:
-        # Automated overnight path (aiobi-update-apply.service triggered
-        # by aiobi-update-security.timer). No GTK popup: this can run
-        # with no logged-in session at 03:00.
-        try:
-            result = apt.upgrade_security_only()
-        except apt.AptLockError as exc:
-            _log(f"--apply --security-only: apt lock held: {exc}")
-            return EXIT_LOCK_HELD
-        st = state_mod.load()
-        st.last_apply = state_mod.utc_now_iso()
-        st.reboot_required = apt.reboot_required()
-        if result.returncode == 0:
-            st.last_apply_result = "success"
-            state_mod.save(st)
-            _log("--apply --security-only: completed")
-            if st.reboot_required:
-                notify.notify_reboot_required()
-            return EXIT_OK
-        st.last_apply_result = "partial"
+        return cmd_apply_security_only(pol)
+
+    return cmd_apply_root_direct(args, pol)
+
+
+def cmd_apply_security_only(pol) -> int:
+    """Automated overnight path (aiobi-update-apply.service triggered by
+    aiobi-update-security.timer). No GTK popup: this can run with no
+    logged-in session at 03:00. Extracted unchanged from the previous
+    single cmd_apply body."""
+    try:
+        result = apt.upgrade_security_only()
+    except apt.AptLockError as exc:
+        _log(f"--apply --security-only: apt lock held: {exc}")
+        return EXIT_LOCK_HELD
+    st = state_mod.load()
+    st.last_apply = state_mod.utc_now_iso()
+    st.reboot_required = apt.reboot_required()
+    if result.returncode == 0:
+        st.last_apply_result = "success"
         state_mod.save(st)
-        _log(f"--apply --security-only: apt-get exited {result.returncode}: {result.stderr.strip()}")
-        notify.notify_error("Security-only update failed — see /var/log/aiobi-update.log")
-        return EXIT_PARTIAL
+        _log("--apply --security-only: completed")
+        if st.reboot_required:
+            notify.notify_reboot_required()
+        return EXIT_OK
+    st.last_apply_result = "partial"
+    state_mod.save(st)
+    _log(f"--apply --security-only: apt-get exited {result.returncode}: {result.stderr.strip()}")
+    notify.notify_error("Security-only update failed — see /var/log/aiobi-update.log")
+    return EXIT_PARTIAL
+
+
+def cmd_apply_root_direct(args: argparse.Namespace, pol) -> int:
+    """The sudo+TTY and systemd/-y root paths — extracted unchanged from
+    the previous single cmd_apply body. Reached only once the caller is
+    confirmed root (cmd_apply's _require_root gate already ran)."""
+    show_gui = not args.yes
 
     try:
         apt.apt_update()
@@ -293,6 +325,94 @@ def cmd_apply(args: argparse.Namespace) -> int:
         return EXIT_PARTIAL
 
     print(f"aiobi-update: {len(succeeded)} package(s) updated")
+    return EXIT_OK
+
+
+def cmd_apply_pkexec(args: argparse.Namespace) -> int:
+    """User + GUI session, non-root, plain --apply (no --security-only,
+    no -y): confirm via GTK, then elevate through polkit (`pkexec`)
+    instead of printing a 'run with sudo' hint. This is the path that
+    closes the terminal-required UX regression against Ubuntu's stock
+    update-manager.
+
+    Flow: confirm -> pkexec apply-helper.sh -> polkit auth prompt ->
+    progress popup streamed from the helper's stdout -> summary popup.
+    If the user cancels at confirm, or polkit denies/dismisses the auth
+    prompt, this returns EXIT_OK without having touched apt — it never
+    falls through to the root-required hint, since the whole point is
+    that no terminal/sudo step is needed."""
+    from . import popup
+
+    try:
+        pol = policy_mod.load_policy()
+    except policy_mod.PolicyError as exc:
+        _log(f"--apply (pkexec): config error: {exc}")
+        print(f"aiobi-update: config error: {exc}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+
+    # We are not root yet, so we cannot run apt-get ourselves to get an
+    # exact count for the confirm dialog. Use the last --check state as
+    # the best-known count; the helper (running elevated) determines
+    # the authoritative list once it starts.
+    st = state_mod.load()
+    count = st.updates_available if st.updates_available > 0 else 1
+
+    if not popup.confirm(count):
+        _log("--apply (pkexec): cancelled by user at confirm dialog")
+        return EXIT_OK
+
+    cmd = ["/usr/bin/pkexec", PKEXEC_HELPER]
+    if args.security_only:
+        cmd.append("--security-only")
+
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+    except OSError as exc:
+        _log(f"--apply (pkexec): failed to launch pkexec: {exc}")
+        print(f"aiobi-update: could not launch pkexec: {exc}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+
+    result = popup.run_with_progress_stream(process)
+    returncode = process.wait()
+
+    # pkexec itself exits 126 when authorization is dismissed/denied and
+    # 127 when no authentication agent is registered for the session —
+    # neither is a package failure, so treat both as a clean no-op
+    # rather than reporting a partial-failure summary.
+    if returncode in (126, 127):
+        _log(f"--apply (pkexec): pkexec exited {returncode} (authorization dismissed or unavailable)")
+        return EXIT_OK
+
+    st = state_mod.load()
+    st.last_apply = state_mod.utc_now_iso()
+    st.reboot_required = result.reboot_required
+
+    if pol.show_summary:
+        popup.summary(result.succeeded, result.failed, result.reboot_required)
+
+    if result.succeeded or result.failed:
+        st.last_apply_result = "partial" if result.failed else "success"
+        st.updates_available = len(result.failed)
+        st.packages = result.failed
+    state_mod.save(st)
+    _log(f"--apply (pkexec): {len(result.succeeded)} succeeded, "
+         f"{len(result.failed)} failed (helper exit {returncode})")
+
+    if result.reboot_required:
+        notify.notify_reboot_required()
+
+    if result.failed:
+        print(f"aiobi-update: {len(result.succeeded)} succeeded, "
+              f"{len(result.failed)} failed: {', '.join(result.failed)}")
+        return EXIT_PARTIAL
+
+    print(f"aiobi-update: {len(result.succeeded)} package(s) updated")
     return EXIT_OK
 
 

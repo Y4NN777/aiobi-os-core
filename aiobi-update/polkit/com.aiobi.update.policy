@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?> <!--*-nxml-*-->
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+
+<!--
+  Aïobi OS — polkit action for aiobi-update's user-context apply flow.
+
+  Installed to /usr/share/polkit-1/actions/com.aiobi.update.policy.
+  Grants the interactive, currently-active desktop session the ability
+  to run /usr/local/lib/aiobi-update/apply-helper.sh as root via
+  `pkexec`, after an authentication prompt. Non-active sessions
+  (allow_inactive=no) and network/other-session callers (allow_any=no)
+  are refused — only the console session in front of the machine can
+  trigger this.
+-->
+<policyconfig>
+
+  <vendor>Aïobi OS</vendor>
+
+  <action id="com.aiobi.update.apply">
+    <description>Apply system updates via Aïobi Update</description>
+    <message>Authentication is required to install Aïobi OS updates</message>
+    <icon_name>system-software-update</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/aiobi-update/apply-helper.sh</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

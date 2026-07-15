@@ -8,6 +8,12 @@
 #           apport/whoopsie/ubuntu-report — components aos-debloat.service
 #           purges at first boot — and carries no Aïobi branding.
 #
+# Also installs the com.aiobi.update polkit action + apply-helper.sh so a
+# normal desktop user can run `aiobi-update --apply` from a GUI session and
+# get a polkit password prompt instead of being forced into a terminal —
+# closes the last UX gap against Ubuntu's stock update-manager (which used
+# its own pkexec-based helper for the same reason).
+#
 # Also purges + pins Ubuntu's native update GUIs (update-manager,
 # update-notifier, software-properties-gtk) so aiobi-update is the only
 # update surface on the system; software-properties-common is deliberately
@@ -31,10 +37,20 @@
 #     aiobi-update/apt.conf.d/52-aiobi-update-hooks   DPkg pre/post hooks
 #     aiobi-update/logrotate.d/aiobi-update           log rotation
 #     aiobi-update/no-ubuntu-updater.pref              APT pin
+#     aiobi-update/apply-helper.sh                     root-side apply
+#                                                       script, run via
+#                                                       pkexec from the
+#                                                       user-context GUI
+#                                                       apply flow
+#     aiobi-update/polkit/com.aiobi.update.policy      polkit action
+#                                                       declaration for
+#                                                       apply-helper.sh
 #
 # Install targets
 #   /usr/local/bin/aiobi-update                        launcher (0755)
 #   /usr/local/lib/aiobi-update/aiobi_update/           package (0644 files)
+#   /usr/local/lib/aiobi-update/apply-helper.sh         pkexec target (0755)
+#   /usr/share/polkit-1/actions/com.aiobi.update.policy polkit action (0644)
 #   /etc/aiobi/update.conf                              policy config (0644)
 #   /etc/systemd/system/aiobi-update.timer|.service     (0644)
 #   /etc/systemd/system/aiobi-update-apply.service      (0644)
@@ -83,6 +99,8 @@ SRC_APT_HOOK="$SRC_DIR/apt.conf.d/52-aiobi-update-hooks"
 SRC_HOOK_SCRIPT="$SRC_DIR/hook.sh"
 SRC_LOGROTATE="$SRC_DIR/logrotate.d/aiobi-update"
 SRC_PIN="$SRC_DIR/no-ubuntu-updater.pref"
+SRC_HELPER="$SRC_DIR/apply-helper.sh"
+SRC_POLKIT="$SRC_DIR/polkit/com.aiobi.update.policy"
 
 LIB_DIR=/usr/local/lib/aiobi-update
 
@@ -96,6 +114,8 @@ LIB_DIR=/usr/local/lib/aiobi-update
 [ -f "$SRC_HOOK_SCRIPT" ]  || { echo "ERROR: $SRC_HOOK_SCRIPT missing"; exit 2; }
 [ -f "$SRC_LOGROTATE" ]    || { echo "ERROR: $SRC_LOGROTATE missing"; exit 2; }
 [ -f "$SRC_PIN" ]          || { echo "ERROR: $SRC_PIN missing"; exit 2; }
+[ -f "$SRC_HELPER" ]       || { echo "ERROR: $SRC_HELPER missing"; exit 2; }
+[ -f "$SRC_POLKIT" ]       || { echo "ERROR: $SRC_POLKIT missing"; exit 2; }
 
 # ----- 2a) DEFENSIVE — repair hook file + helper BEFORE any apt call --------
 # If a previous run left a broken /etc/apt/apt.conf.d/52-aiobi-update-hooks
@@ -154,6 +174,16 @@ find "$LIB_DIR/aiobi_update" -type d -exec chmod 0755 {} +
 find "$LIB_DIR/aiobi_update" -type f -exec chmod 0644 {} +
 echo "  installed $LIB_DIR/aiobi_update ($(find "$LIB_DIR/aiobi_update" -name '*.py' | wc -l) Python files)"
 
+# ----- 5b) Polkit action + apply-helper for user-context pkexec elevation ---
+# Placed alongside the hook helper installed early in step 2a. Lets a
+# normal desktop user run `aiobi-update --apply` and get a polkit password
+# prompt (cli.py's PKEXEC MODE) instead of being forced into a terminal.
+install -m 0755 "$SRC_HELPER" "$LIB_DIR/apply-helper.sh"
+install -d -m 0755 /usr/share/polkit-1/actions
+install -m 0644 "$SRC_POLKIT" \
+    /usr/share/polkit-1/actions/com.aiobi.update.policy
+echo "  installed apply-helper + com.aiobi.update polkit action"
+
 # ----- 6) Policy config --------------------------------------------------------
 install -m 0644 "$SRC_CONF" /etc/aiobi/update.conf
 echo "  installed /etc/aiobi/update.conf"
@@ -210,6 +240,8 @@ fi
 [ -f /etc/aiobi/update.conf ] && echo "  ✓ /etc/aiobi/update.conf present"
 [ -d "$LIB_DIR/aiobi_update" ] && echo "  ✓ $LIB_DIR/aiobi_update present"
 [ -f /etc/apt/preferences.d/no-ubuntu-updater.pref ] && echo "  ✓ no-ubuntu-updater.pref present"
+[ -x "$LIB_DIR/apply-helper.sh" ] && echo "  ✓ $LIB_DIR/apply-helper.sh present and executable"
+[ -f /usr/share/polkit-1/actions/com.aiobi.update.policy ] && echo "  ✓ com.aiobi.update.policy present"
 
 if python3 -c "
 import sys
