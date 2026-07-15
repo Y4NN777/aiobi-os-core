@@ -10,38 +10,28 @@ Aïobi OS* (RN Yanis Axel DABO, Burkina Institute of Technology).
 
 ## What this repository is
 
-- **Build pipeline** — 22 numbered chroot scripts (`01`–`23`, gaps at
-  `07`, `14`, `16`) + `run-all.sh` orchestrator + `validate.sh`
-  harness over `scripts/tests/*.sh`. Applies the customization layers
-  on top of the base Aïobi ISO: identity, visual, shell, applications,
-  on-device AI, update mechanism, first-boot provisioning, persistence.
-- **`aiobi-term/`** — terminal AI assistant. Python 3 CLI with a
-  hybrid symbolic-neural engine: deterministic knowledge base (50
-  rules across 12 categories, EN + FR) answers well-known Linux
-  failure modes in <10 ms; falls back to `qwen2.5:1.5b` over local
-  Ollama on novel queries. Bash/Zsh readline bindings `Ctrl-X Ctrl-A`
-  (`--cmd`) and `Ctrl-X Ctrl-H` (`--explain`). Full design in
-  `aiobi-term/README.md`.
-- **`aiobi-update/`** — native update mechanism replacing Ubuntu's
-  `update-manager` GUI stack. Python 3 + GTK 4 + libadwaita popups.
-  Weekly check + daily security-only auto-apply via systemd timers.
-  Interactive GTK apply is PolicyKit-authenticated so `pkexec`
-  elevates only the `apt` subprocess. Blacklists snapd + telemetry
-  + purged Ubuntu updater packages via APT pin `-10`.
-- **`config/`** — dconf profile + keyfiles that enforce brand defaults
-  (panel, wallpaper slideshow, terminal palette, GTK theme, taskbar
-  favorite-apps, Ding desktop icons) while preserving user freedom on
-  colour scheme, wallpaper choice, and accent.
-- **`design/`** — architecture UMLs (component view, secure-boot
-  sequence, security layer, AI use-case / deployment / lifecycle /
-  sequence).
-- **Zero-data-leak posture** — Ollama binds `127.0.0.1`, `iptables` +
-  `ip6tables` OUTPUT rule rejects TCP :11434 to non-loopback. See
-  `SECURITY.md` for the verification protocol.
+This repository ships:
+
+- A **chroot-time build pipeline** that composes on top of a base
+  Aïobi ISO to produce the release-candidate image (numbered shell
+  scripts + orchestrator + test harness).
+- An **on-device terminal AI assistant** with a hybrid symbolic-
+  neural engine — deterministic answers on well-known Linux
+  failure modes in <10 ms, LLM fallback on novel queries.
+- A **native update mechanism** that replaces Ubuntu's GUI update
+  stack with an Aïobi-branded, PolicyKit-authenticated one.
+- A **first-boot debloat service** that removes the Ubuntu
+  telemetry packages retained during install to let Subiquity work.
+- **Brand defaults enforced at the system level** via dconf
+  keyfiles, with user-freedom carve-outs on colour scheme,
+  wallpaper, and accent.
+- A **kernel-level zero-data-leak posture** for the on-device AI —
+  Ollama loopback bind + iptables OUTPUT filter.
+- **Architecture UMLs** backing the thesis chapters.
 
 Scripts run inside a **Cubic chroot** during ISO build (on top of a
-prior Aïobi base ISO carrying the identity + branding layer), and are
-also safe to re-run on an installed VM.
+prior Aïobi base ISO carrying the identity + branding layer), and
+are also safe to re-run on an installed VM.
 
 ## Repository layout
 
