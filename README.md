@@ -11,17 +11,26 @@ Aïobi OS* (RN Yanis Axel DABO, Burkina Institute of Technology).
 
 ## What this repository is
 
-- **19 idempotent shell scripts** that apply the six customization
+- **20 idempotent shell scripts** that apply the six customization
   layers (system identity, visual identity, shell composition,
-  application inventory, AI layer, persistence & lockdown) plus a
+  application inventory, on-device AI, persistence & lockdown) plus a
   validation script and an all-in-one orchestrator.
+- **`aiobi-term/`** — the on-device terminal AI assistant: a stdlib-only
+  Python CLI plus a Bash/Zsh readline integration (`Ctrl-X Ctrl-A`),
+  wired to the locally-bound Ollama daemon.
+- **`design/`** — the architecture diagrams (UMLs) that back the thesis
+  chapters: component view, secure-boot sequence, security layer,
+  AI use-case / deployment / lifecycle / sequence.
 - **`dconf` keyfiles and profile** that enforce brand defaults at the
-  system level while preserving user freedom on non-negotiable keys
-  (colour scheme, wallpaper, accent).
+  system level (panel layout, wallpaper, terminal palette, GTK theme)
+  while preserving user freedom on non-negotiable keys (colour scheme,
+  wallpaper choice, accent).
 - **SVG icon placeholders** for the AI-native surface (chat, terminal,
   status indicators) awaiting their production art pass.
-- **`config/local.d/`** overrides installed under
-  `/etc/dconf/db/local.d/` at deploy time.
+- **Zero-data-leak posture, enforced at the kernel level.** The Ollama
+  daemon binds `127.0.0.1` only; an `iptables` + `ip6tables` OUTPUT
+  rule rejects any TCP :11434 traffic to non-loopback destinations
+  regardless of application configuration.
 
 The scripts are intended to be run **inside a Cubic chroot** during ISO
 build, and are also safe to run on an installed VM for post-install
@@ -40,7 +49,7 @@ aiobi-os-core/
 │   ├── 02-configure-panel.sh       # dconf keyfile — panel layout
 │   ├── 03-inject-theme.sh          # GTK 3+4 theme (Yaru clone + sed + gresource)
 │   ├── 04-install-icons.sh         # Papirus recolour + Aïobi placeholders
-│   ├── 04b-override-icons.sh       # Later-sprint icon swap
+│   ├── 04b-override-icons.sh       # icon swap for the AI-native surface
 │   ├── 05-rebrand-os.sh            # OS identity + GRUB + MOTD + first-boot service
 │   ├── 06-apply-persistence.sh     # dconf profile + locks + skel + fonts
 │   ├── 07-validate.sh              # PASS/FAIL check against milestone criteria
@@ -51,18 +60,37 @@ aiobi-os-core/
 │   ├── 12-wine-proton-install.sh   # Wine 9.0 + GE-Proton + MIME handlers
 │   ├── 13-productivity-stack.sh    # OnlyOffice + Brave + VLC + Flameshot + Flatpaks
 │   ├── 14-run-all.sh               # orchestrator (chains all steps + 07)
-│   ├── 15-install-ollama.sh        # Ollama daemon + Qwen 2.5 models (loopback)
-│   ├── 17-install-ai-cli.sh        # aiobi-ai Python CLI + Bash/Zsh integration
-│   ├── 18-install-anythingllm.sh   # AnythingLLM AppImage + skel default config
-│   └── 19-tune-ram.sh              # zRAM (zstd) + Ollama socket activation
+│   ├── 15-install-ollama.sh        # Ollama daemon + first-boot model pull (loopback)
+│   ├── 17-install-aiobi-term.sh    # aiobi-term Python CLI + shell integration
+│   ├── 18-install-anythingllm.sh   # AnythingLLM Desktop AppImage
+│   ├── 19-tune-ram.sh              # zRAM (zstd) + Ollama socket activation
+│   └── 20-ai-firewall.sh           # iptables OUTPUT REJECT :11434 non-loopback
+├── aiobi-term/
+│   ├── aiobi-term                  # Python 3 CLI (stdlib only)
+│   ├── aiobi-term.sh               # Bash/Zsh readline binding (Ctrl-X Ctrl-A)
+│   └── README.md                   # design + usage
+├── design/
+│   ├── aiobi_component.png         # core-OS component view
+│   ├── secure_boot_seq.png         # secure-boot sequence
+│   ├── security_layer.png          # zero-data-leak security layer
+│   ├── ai_usecase.png              # AI layer — use cases
+│   ├── ai_deployment.png           # AI layer — deployment (loopback bind)
+│   ├── ai_model_lifecycle.png      # AI layer — model lifecycle (pull → serve → unload)
+│   ├── ai_sequence.png             # AI layer — request sequence (aiobi-term ↔ Ollama)
+│   └── README.md                   # index + regeneration notes
 ├── config/
 │   ├── dconf-profile               # /etc/dconf/profile/user
-│   ├── aiobi-panel.dconf           # /etc/dconf/db/local.d/20-aiobi-panel
+│   ├── aiobi-panel.dconf           # panel layout + colours
+│   ├── aiobi-wallpaper.dconf       # default wallpaper (unlocked)
+│   ├── aiobi-terminal.dconf        # GNOME Terminal 16-colour palette
 │   └── local.d/
-│       └── 00-aiobi-branding       # gtk/icon/font system defaults
+│       └── 00-aiobi-branding       # gtk/icon/font/color-scheme defaults
 ├── aiobi-theme/                    # legacy overlay stylesheets (superseded by script 03)
 └── icons/                          # AI-native SVG placeholders
 ```
+
+Note: `16-` is deliberately skipped; PWA-wrapper work has been descoped
+for the current milestone.
 
 ## Usage
 
@@ -78,23 +106,24 @@ cd /tmp/aiobi-os-core
 # 3. Recommended --- one-shot orchestrator (runs all layers + validation):
 bash scripts/14-run-all.sh
 
-# Or run individually, in this order:
+# Or run individually, in the orchestrator's order:
 bash scripts/01-install-extensions.sh
 bash scripts/02-configure-panel.sh
 bash scripts/03-inject-theme.sh
 bash scripts/04-install-icons.sh
 bash scripts/05-rebrand-os.sh
 bash scripts/08-inject-shell-theme.sh
-bash scripts/09-terminal-profile.sh
 bash scripts/10-snap-final-purge.sh
 bash scripts/11-apt-brand-alias.sh
 bash scripts/12-wine-proton-install.sh
 bash scripts/13-productivity-stack.sh
 bash scripts/15-install-ollama.sh
-bash scripts/17-install-ai-cli.sh
+bash scripts/17-install-aiobi-term.sh
 bash scripts/18-install-anythingllm.sh
 bash scripts/19-tune-ram.sh
+bash scripts/20-ai-firewall.sh
 bash scripts/06-apply-persistence.sh
+bash scripts/09-terminal-profile.sh
 bash scripts/07-validate.sh
 ```
 
@@ -112,6 +141,38 @@ from the backup before re-applying its changes on subsequent runs.
 Re-running the orchestrator or any individual script is safe. Backups
 live at predictable suffixes (`.aiobi.bak`, `.magenta.bak`, etc.)
 alongside the modified files.
+
+## AI layer
+
+The AI layer is split across two consumers of a single locally-bound
+Ollama daemon.
+
+| Consumer                | Model tag                              | Role                                                    |
+|-------------------------|----------------------------------------|---------------------------------------------------------|
+| `aiobi-term` (terminal) | `qwen2.5:1.5b`                         | Chat + shell-command extraction (single model, two system prompts, deterministic decoding for `--cmd`) |
+| `AnythingLLM` (desktop) | `qwen3-vl:2b-instruct-q8_0`            | Multi-modal chat (text + image), Desktop Assistant popup |
+
+Both models are pulled on the first boot by `aiobi-ollama-firstpull.service`
+(registered by `15-install-ollama.sh`), not baked into the ISO.
+
+**Memory posture.** The Ollama daemon is socket-activated and stops
+when unneeded: after `OLLAMA_KEEP_ALIVE=5m` of idleness, models are
+unloaded and the daemon converges to zero resident memory.
+`systemd-socket-proxyd` on `127.0.0.1:11434` forwards to the private
+backend on `127.0.0.1:11435`, giving the socket-activation trigger
+point.
+
+**Zero-data-leak posture.** The daemon binds `127.0.0.1` only; script
+`20-ai-firewall.sh` installs an `iptables` + `ip6tables` OUTPUT rule
+that rejects TCP :11434 to any non-loopback destination. Any
+misconfigured client (or bundled Ollama from a third-party desktop
+app) attempting to reach an external Ollama endpoint fails at the
+kernel filter.
+
+**Verified end-to-end.** The `07-validate.sh` acceptance script and
+manual measurements confirm loopback binding, kernel-level rejection
+counters at zero, and `StopWhenUnneeded` returning the AI subsystem to
+its idle memory baseline after each session.
 
 ## Design tokens
 
