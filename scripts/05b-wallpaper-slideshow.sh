@@ -15,11 +15,13 @@
 #           third-party wallpaper changer needed — the compositor
 #           renders the crossfade natively.
 #
-# Timing  : each image displays for 175 s (~3 min) then a 5 s crossfade
-#           bridges to the next → 3 min per wallpaper, N × 3 min for
-#           one full loop. 20 assets → 1 h full loop (user preference:
-#           10 h was too long, empirically the desktop saw at most 2
-#           transitions in a normal work session).
+# Timing  : each image displays for 1255 s (~21 min) then a 5 s crossfade
+#           bridges to the next → 21 min per wallpaper, N × 21 min for
+#           one full loop. 20 assets → 7 h full loop (user preference:
+#           30 min per slide = 10 h loop was too long, 3 min per slide
+#           was too short, 21 min lands the full loop at 7 h — enough
+#           transitions in a work day to feel dynamic without the
+#           wallpaper changing distractingly often).
 #
 # The referenced XML is consumed by config/aiobi-wallpaper.dconf which
 # script 06 installs as /etc/dconf/db/local.d/00-aiobi-wallpaper. If
@@ -82,7 +84,7 @@ echo "  found $N wallpaper(s), generating slideshow manifest..."
             current="${PNGS[$i]}"
             next="${PNGS[$(( (i + 1) % N ))]}"
             printf '  <static>\n'
-            printf '    <duration>175.0</duration>\n'
+            printf '    <duration>1255.0</duration>\n'
             printf '    <file>%s</file>\n' "$current"
             printf '  </static>\n'
             printf '  <transition type="overlay">\n'
