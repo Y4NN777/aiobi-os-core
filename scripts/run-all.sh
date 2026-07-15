@@ -26,10 +26,12 @@
 #   21 configure-bash-completion       TAB menu-complete + argcomplete + skel setup
 #   06 apply-persistence               dconf locks + skel + fonts — LAST (seals state)
 #   09 terminal-profile                gnome-terminal Aïobi palette (verifies compiled db)
-#   07 validate                        PASS/FAIL check against acceptance criteria
+#      validate                        harness over scripts/tests/*.sh (no numeric
+#                                      prefix — it is a meta-tool, not a step)
 #
 # The orchestrator itself has no numeric prefix on purpose — it is not
-# a step, it is the entry point that chains the steps above.
+# a step, it is the entry point that chains the steps above. The same
+# rationale applies to validate.sh (the test-suite harness).
 #
 # Chroot mode note : steps that require a live D-Bus session (gnome-
 # extensions enable, dconf writes to per-user) are silently skipped inside
@@ -107,8 +109,9 @@ run_step 06-apply-persistence.sh
 # Verify the terminal palette landed in the compiled dconf db
 run_step 09-terminal-profile.sh
 
-# Validation of the full milestone criteria
-run_step 07-validate.sh
+# Validation of the full milestone criteria — harness over scripts/tests/*.sh
+# (unnumbered on purpose: meta-tool, not a pipeline step).
+run_step validate.sh
 
 echo "" | tee -a "$LOG"
 echo "==> Aïobi customization pipeline FINISHED: $(date -u +%FT%TZ)" | tee -a "$LOG"
