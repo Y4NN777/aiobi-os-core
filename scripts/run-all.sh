@@ -24,6 +24,8 @@
 #   19 tune-ram                        zRAM swap + Ollama socket activation
 #   20 ai-firewall                     iptables/ip6tables OUTPUT REJECT :11434 non-loopback
 #   21 configure-bash-completion       TAB menu-complete + argcomplete + skel setup
+#   22 taskbar-desktop-defaults        Ding install + favorite-apps + Ding config +
+#                                      /etc/skel/Desktop + first-login trust service
 #   23 install-aiobi-update            aiobi-update CLI + systemd timers/units, replaces
 #                                      update-manager (purged) — must run before 06 seals
 #                                      /etc/skel and dconf state
@@ -102,6 +104,13 @@ run_step 20-ai-firewall.sh
 # user's shell. Placed before 06-apply-persistence.sh because 06 copies skel
 # into the sealed image state.
 run_step 21-configure-bash-completion.sh
+
+# Windows-familiar defaults — Ding for desktop icons, dash-to-panel
+# favorite-apps for the taskbar pins, /etc/skel/Desktop preseeded with
+# the six default shortcuts, first-login trust service so no icon
+# renders with the grey untrusted cross. Placed before 06 because it
+# writes a dconf keyfile 06 will compile.
+run_step 22-taskbar-desktop-defaults.sh
 
 # Native update mechanism — replaces Ubuntu's update-manager/update-notifier
 # (purged here because they depend on apport/whoopsie, removed by
