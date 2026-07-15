@@ -1,0 +1,11 @@
+[Unit]
+Description=Aïobi OS — notify the logged-in user of pending updates
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/aiobi-update --notify-user
+# This is a systemd --user unit: it already runs inside the user's
+# session (DISPLAY / DBUS_SESSION_BUS_ADDRESS / XDG_RUNTIME_DIR are
+# already correct). This is deliberate — it avoids the root-service ->
+# user-session bridging that would otherwise require reading
+# /run/user/<uid>/bus and `sudo -u <user>` from a root systemd unit.

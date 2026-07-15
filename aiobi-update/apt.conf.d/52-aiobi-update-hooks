@@ -1,0 +1,19 @@
+// Aïobi OS — aiobi-update audit hooks.
+//
+// Any apt/apt-get transaction — whether run by aiobi-update itself or
+// by a user/admin invoking apt directly — is appended to the same log
+// aiobi-update writes to (/var/log/aiobi-update.log, tailed by
+// `aiobi-update --log`). This keeps one audit trail for "what changed
+// the package set" regardless of which tool triggered it.
+//
+// Both hooks are guarded (`test -x ... && ... || true`) so a missing
+// binary or a read-only /var/log never turns into a broken apt
+// transaction — hooks must never fail the transaction they observe.
+
+DPkg::Pre-Invoke {
+    "test -x /usr/local/bin/aiobi-update && echo \"$(date -u +%FT%TZ) apt/dpkg transaction starting (uid=$(id -u))\" >> /var/log/aiobi-update.log 2>/dev/null || true";
+};
+
+DPkg::Post-Invoke {
+    "test -x /usr/local/bin/aiobi-update && echo \"$(date -u +%FT%TZ) apt/dpkg transaction finished\" >> /var/log/aiobi-update.log 2>/dev/null || true";
+};

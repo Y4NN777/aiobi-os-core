@@ -1,0 +1,10 @@
+[Unit]
+Description=Aïobi OS — weekly update check timer
+
+[Timer]
+OnCalendar=Sun *-*-* 06:00:00
+RandomizedDelaySec=1h
+Persistent=yes
+
+[Install]
+WantedBy=timers.target

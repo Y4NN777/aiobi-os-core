@@ -1,0 +1,27 @@
+# Aïobi OS — block Ubuntu's native update GUIs from ever being
+# reinstalled via a dependency chain. aiobi-update is the first-class
+# replacement (see scripts/23-install-aiobi-update.sh for the purge
+# that runs alongside this pin).
+#
+# software-properties-common is intentionally NOT pinned here — it
+# provides add-apt-repository, relied on by scripts/01 and scripts/12.
+
+Package: update-manager
+Pin: release a=*
+Pin-Priority: -10
+
+Package: update-manager-core
+Pin: release a=*
+Pin-Priority: -10
+
+Package: update-notifier
+Pin: release a=*
+Pin-Priority: -10
+
+Package: update-notifier-common
+Pin: release a=*
+Pin-Priority: -10
+
+Package: software-properties-gtk
+Pin: release a=*
+Pin-Priority: -10

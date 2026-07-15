@@ -1,0 +1,13 @@
+[Unit]
+Description=Aïobi OS — daily overnight security-only update timer
+
+[Timer]
+OnCalendar=Mon..Sun *-*-* 03:00:00
+Persistent=yes
+# Timer name differs from the service it triggers (this is the
+# security-cadence timer; the payload is the shared apply runner) —
+# Unit= is required, systemd's default name-matching does not apply.
+Unit=aiobi-update-apply.service
+
+[Install]
+WantedBy=timers.target

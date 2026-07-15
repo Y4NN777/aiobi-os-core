@@ -1,0 +1,18 @@
+[Unit]
+Description=Aïobi OS — overnight security-only update apply
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/usr/local/bin/aiobi-update
+
+[Service]
+Type=oneshot
+# Triggered exclusively by aiobi-update-security.timer (03:00 daily).
+# --security-only restricts the transaction to the noble-security
+# suite and never raises a GTK popup — no user session is guaranteed
+# to exist at this hour. Manual interactive apply goes through
+# `aiobi-update --apply` directly (from a terminal or from the
+# notify-user "Update now" action), not through this unit.
+ExecStart=/usr/local/bin/aiobi-update --apply --security-only -y
+# 1 = no security updates pending; 3 = apt lock held (retried at next
+# timer firing) — both are normal outcomes, not unit failures.
+SuccessExitStatus=1 3

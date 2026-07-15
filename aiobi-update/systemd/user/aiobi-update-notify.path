@@ -1,0 +1,8 @@
+[Unit]
+Description=Aïobi OS — watch for update-available notify trigger
+
+[Path]
+PathModified=/run/aiobi-update/notify
+
+[Install]
+WantedBy=default.target

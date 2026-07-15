@@ -24,6 +24,9 @@
 #   19 tune-ram                        zRAM swap + Ollama socket activation
 #   20 ai-firewall                     iptables/ip6tables OUTPUT REJECT :11434 non-loopback
 #   21 configure-bash-completion       TAB menu-complete + argcomplete + skel setup
+#   23 install-aiobi-update            aiobi-update CLI + systemd timers/units, replaces
+#                                      update-manager (purged) — must run before 06 seals
+#                                      /etc/skel and dconf state
 #   06 apply-persistence               dconf locks + skel + fonts — LAST (seals state)
 #   09 terminal-profile                gnome-terminal Aïobi palette (verifies compiled db)
 #      validate                        harness over scripts/tests/*.sh (no numeric
@@ -99,6 +102,15 @@ run_step 20-ai-firewall.sh
 # user's shell. Placed before 06-apply-persistence.sh because 06 copies skel
 # into the sealed image state.
 run_step 21-configure-bash-completion.sh
+
+# Native update mechanism — replaces Ubuntu's update-manager/update-notifier
+# (purged here because they depend on apport/whoopsie, removed by
+# aos-debloat.service at first boot, and are unbranded). Ships aiobi-update
+# CLI + systemd timers/services/user-path unit. Placed before
+# 06-apply-persistence.sh for the same reason as step 21: 06 seals
+# /etc/skel and dconf state, so anything touching per-user defaults must
+# land first.
+run_step 23-install-aiobi-update.sh
 
 # Persistence — dconf profile + keyfiles (branding, wallpaper, panel, terminal)
 # + locks + /etc/skel. This step installs every system dconf keyfile and

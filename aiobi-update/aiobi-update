@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+# aiobi-update — native update mechanism for Aïobi OS.
+#
+# Thin launcher: the real implementation lives in the aiobi_update
+# package installed to /usr/local/lib/aiobi-update/ by
+# scripts/23-install-aiobi-update.sh, mirroring the aiobi-term pattern
+# (self-contained lib path, independent of the system Python's minor
+# version).
+#
+# Usage
+#   aiobi-update                # status
+#   aiobi-update --check        # force a check
+#   aiobi-update --apply [-y]   # apply available updates
+#   aiobi-update --defer 24h    # snooze notifications
+#   aiobi-update --log          # tail the log
+#   aiobi-update --version
+
+import sys
+
+sys.path.insert(0, "/usr/local/lib/aiobi-update")
+
+from aiobi_update.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())
