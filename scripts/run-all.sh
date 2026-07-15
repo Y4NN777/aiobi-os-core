@@ -13,6 +13,8 @@
 #   03 inject-theme                    Aïobi GTK theme (Yaru clone + sed)
 #   04 install-icons                   Papirus + Papirus-Dark + Aïobi placeholders
 #   05 rebrand-os                      os-release + hostname + GRUB + MOTD + first-boot
+#   05b wallpaper-slideshow            Generate XML slideshow from Aïobi PNGs
+#                                      (30 min per slide + 5 s crossfade)
 #   08 inject-shell-theme              Aïobi gnome-shell theme (needs 01's user-theme)
 #   10 snap-final-purge                APT pin nosnap + residue cleanup
 #   11 apt-brand-alias                 mirror.aiobi.local (DEB822 + /etc/hosts)
@@ -82,6 +84,11 @@ run_step 02-configure-panel.sh
 run_step 03-inject-theme.sh
 run_step 04-install-icons.sh
 run_step 05-rebrand-os.sh
+
+# Wallpaper slideshow — generate the XML manifest from every PNG present
+# under /usr/share/backgrounds/aiobi/. Must run BEFORE 06-apply-persistence
+# so the XML the wallpaper dconf keyfile references exists on disk.
+run_step 05b-wallpaper-slideshow.sh
 
 # Polish phase — shell theme + snap purge + apt alias
 run_step 08-inject-shell-theme.sh
