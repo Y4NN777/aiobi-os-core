@@ -79,10 +79,75 @@ Pin: release a=*
 Pin-Priority: -10
 EOF
 
-# --- 4. Purge stale apt cache so the new pin takes effect immediately -------
+# --- 4. First-boot debloat service — actually purge snapd + companions ------
+# Snapd is deliberately KEPT in the ISO because Subiquity (the Ubuntu 24.04
+# installer) is a snap; purging it at chroot time would kill installation.
+# Instead we ship /usr/local/sbin/aos-debloat.sh + aos-debloat.service that
+# run once at first boot POST-INSTALL to purge snapd and its telemetry
+# companions, then self-destruct. Live-CD guard via `df -T /` overlay check
+# (hardware-level, per CLAUDE.md — casper cmdline check is unreliable on
+# 24.04 and only used as fallback). Spec sourced from Log 1 §2.4-§2.5.
+
+tee /usr/local/sbin/aos-debloat.sh > /dev/null << 'EOF'
+#!/bin/bash
+# Aïobi OS — First-boot debloat (self-destructing oneshot).
+# Purges snapd + telemetry companions on the INSTALLED system only.
+# Runs once post-install via aos-debloat.service, then removes itself.
+
+# 1. Live-CD guard (hardware-level primary + cmdline fallback)
+if df -T / | awk '{print $2}' | grep -q "^overlay$"; then
+    exit 0
+fi
+if grep -q "casper" /proc/cmdline; then
+    exit 0
+fi
+
+# 2. Wait for post-boot APT locks to release (unattended-upgrades, etc.)
+sleep 45
+
+# 3. Purge snapd + telemetry companions
+apt-get purge -y snapd ubuntu-report popularity-contest apport whoopsie apport-symptoms
+apt-get autoremove --purge -y
+rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd
+
+# 4. Hold to prevent any dependency chain from reinstalling them
+apt-mark hold snapd ubuntu-report popularity-contest apport whoopsie apport-symptoms
+
+# 5. Self-destruct — disable unit, unlink unit + script
+systemctl disable aos-debloat.service 2>/dev/null || true
+rm -f /etc/systemd/system/aos-debloat.service
+rm -f /etc/systemd/system/multi-user.target.wants/aos-debloat.service
+rm -f /usr/local/sbin/aos-debloat.sh
+EOF
+chmod 755 /usr/local/sbin/aos-debloat.sh
+
+tee /etc/systemd/system/aos-debloat.service > /dev/null << 'EOF'
+[Unit]
+Description=Aïobi OS — first-boot debloat (snapd + telemetry companions)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/usr/local/sbin/aos-debloat.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/aos-debloat.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable — systemctl works when systemd is running, symlink fallback for chroot
+systemctl enable aos-debloat.service 2>/dev/null || \
+    ln -sf /etc/systemd/system/aos-debloat.service \
+           /etc/systemd/system/multi-user.target.wants/aos-debloat.service
+echo "  aos-debloat.service enabled (first-boot snapd + telemetry purge)"
+
+# --- 5. Purge stale apt cache so the new pin takes effect immediately -------
 apt-get update -qq || true
 
-# --- 5. Verification ---------------------------------------------------------
+# --- 6. Verification (chroot expects snapd still installed — purge is deferred
+#        to first boot via aos-debloat.service; verify pin + service presence) -
 echo "== Verification =="
 echo "== apt-cache policy snapd =="
 # Capture into a variable first so head does not close the pipe and send
