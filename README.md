@@ -11,16 +11,27 @@ Aïobi OS* (RN Yanis Axel DABO, Burkina Institute of Technology).
 
 ## What this repository is
 
-- **21 idempotent shell scripts** that apply the six customization
-  layers (system identity, visual identity, shell composition,
-  application inventory, on-device AI, persistence & lockdown) plus a
-  validation script and an all-in-one orchestrator (`run-all.sh`).
+- **20 idempotent numbered shell scripts** (steps `01`, `02`, `03`,
+  `04`, `04b`, `05`, `06`, `07`, `08`, `09`, `10`, `11`, `12`, `13`,
+  `15`, `17`, `18`, `19`, `20`, `21` — step `16` is deliberately
+  skipped, PWA-wrapper work descoped for the current milestone) that
+  apply the six customization layers (system identity, visual identity,
+  shell composition, application inventory, on-device AI, persistence
+  & lockdown), plus two unnumbered meta-tools (`run-all.sh` orchestrator
+  and `validate.sh` — a harness that iterates over `scripts/tests/*.sh`
+  and aggregates PASS/FAIL). Neither is a numbered step.
 - **`aiobi-term/`** — the on-device terminal AI assistant: a stdlib-only
   Python CLI, a Python package with a deterministic knowledge base
-  (~50 curated rules across deprecated tools, Aïobi-purged apps,
-  systemd/filesystem/network/package-mgr/python/git/ssh/docker/display
-  errors, EN + FR i18n), and a Bash/Zsh readline integration
+  (50 curated rules across 12 categories — deprecated tools,
+  Aïobi-purged apps, systemd/filesystem/network/package-mgr/python/
+  git/ssh/docker/display errors, and shell-builtin misuse — with
+  first-class EN + FR i18n), and a Bash/Zsh readline integration
   (`Ctrl-X Ctrl-A` for `--cmd`, `Ctrl-X Ctrl-H` for `--explain`).
+  The knowledge base is extensible by design: adding a rule = one
+  entry in the relevant `rules/*.py` module plus one message key in
+  each language table; adding a language = one new dictionary in
+  `i18n.py`; adding a category = one new module plus one line in
+  `loader.py`.
 - **`design/`** — the architecture diagrams (UMLs) that back the thesis
   chapters: component view, secure-boot sequence, security layer,
   AI use-case / deployment / lifecycle / sequence.
@@ -55,7 +66,6 @@ aiobi-os-core/
 │   ├── 04b-override-icons.sh       # icon swap for the AI-native surface
 │   ├── 05-rebrand-os.sh            # OS identity + GRUB + MOTD + first-boot service
 │   ├── 06-apply-persistence.sh     # dconf profile + locks + skel + fonts
-│   ├── 07-validate.sh              # PASS/FAIL check against milestone criteria
 │   ├── 08-inject-shell-theme.sh    # GNOME Shell theme (Yaru clone + sed)
 │   ├── 09-terminal-profile.sh      # GNOME Terminal palette
 │   ├── 10-snap-final-purge.sh      # snap removal + APT pin
@@ -67,8 +77,12 @@ aiobi-os-core/
 │   ├── 18-install-anythingllm.sh   # AnythingLLM Desktop AppImage
 │   ├── 19-tune-ram.sh              # zRAM (zstd) + Ollama socket activation
 │   ├── 20-ai-firewall.sh           # iptables OUTPUT REJECT :11434 non-loopback
-│   ├── 21-configure-bash-completion.sh  # TAB menu-complete + argcomplete + skel setup
-│   └── run-all.sh                  # orchestrator (no number — entry point, not a step)
+│   ├── 21-configure-bash-completion.sh  # TAB menu-complete + Shift-Tab back + skel setup
+│   ├── run-all.sh                  # orchestrator (no number — entry point, not a step)
+│   ├── validate.sh                 # harness (no number — meta-tool over scripts/tests/*.sh)
+│   └── tests/                      # one test-<step>-<domain>.sh per pipeline step
+│       ├── _common.sh              # shared assertion helpers + counters
+│       └── test-*.sh               # per-step acceptance checks (PASS/FAIL/SKIP)
 ├── aiobi-term/
 │   ├── aiobi-term                  # Python 3 CLI entry point (stdlib only)
 │   ├── aiobi-term.sh               # Bash/Zsh readline bindings
@@ -81,18 +95,19 @@ aiobi-os-core/
 │   │       ├── engine.py           # matcher + priority resolver + template renderer
 │   │       ├── i18n.py             # Translator (LANG detection) + EN + FR message tables
 │   │       ├── loader.py           # rule aggregator (explicit imports, no runtime magic)
-│   │       └── rules/              # 11 rule modules, ~50 curated rules total
-│   │           ├── deprecated_tools.py
-│   │           ├── aiobi_purged.py
-│   │           ├── systemd_errors.py
-│   │           ├── filesystem_errors.py
-│   │           ├── network_errors.py
-│   │           ├── package_mgr.py
-│   │           ├── python_errors.py
-│   │           ├── git_errors.py
-│   │           ├── ssh_errors.py
-│   │           ├── docker_errors.py
-│   │           └── xorg_wayland.py
+│   │       └── rules/              # 12 rule modules, 50 curated rules total
+│   │           ├── deprecated_tools.py    # 10 rules
+│   │           ├── aiobi_purged.py        # 5 rules
+│   │           ├── systemd_errors.py      # 4 rules
+│   │           ├── filesystem_errors.py   # 6 rules
+│   │           ├── network_errors.py      # 5 rules
+│   │           ├── package_mgr.py         # 5 rules
+│   │           ├── python_errors.py       # 3 rules
+│   │           ├── git_errors.py          # 4 rules
+│   │           ├── ssh_errors.py          # 3 rules
+│   │           ├── docker_errors.py       # 2 rules
+│   │           ├── xorg_wayland.py        # 2 rules (display-error)
+│   │           └── shell_builtins.py      # 1 rule
 │   └── README.md                   # design + usage
 ├── design/
 │   ├── aiobi_component.png         # core-OS component view
@@ -136,6 +151,7 @@ bash scripts/01-install-extensions.sh
 bash scripts/02-configure-panel.sh
 bash scripts/03-inject-theme.sh
 bash scripts/04-install-icons.sh
+bash scripts/04b-override-icons.sh
 bash scripts/05-rebrand-os.sh
 bash scripts/08-inject-shell-theme.sh
 bash scripts/10-snap-final-purge.sh
@@ -150,7 +166,7 @@ bash scripts/20-ai-firewall.sh
 bash scripts/21-configure-bash-completion.sh
 bash scripts/06-apply-persistence.sh
 bash scripts/09-terminal-profile.sh
-bash scripts/07-validate.sh
+bash scripts/validate.sh
 ```
 
 ### On an installed VM (post-install polish)
@@ -195,10 +211,45 @@ misconfigured client (or bundled Ollama from a third-party desktop
 app) attempting to reach an external Ollama endpoint fails at the
 kernel filter.
 
-**Verified end-to-end.** The `07-validate.sh` acceptance script and
-manual measurements confirm loopback binding, kernel-level rejection
-counters at zero, and `StopWhenUnneeded` returning the AI subsystem to
-its idle memory baseline after each session.
+**Verified end-to-end.** The `validate.sh` acceptance harness (which
+runs `scripts/tests/test-20-ai-firewall.sh` among the other per-step
+tests) and manual measurements confirm the posture through three
+complementary angles:
+
+1. **Bind check** — `ss -tlnp` shows the daemon (and the
+   `systemd-socket-proxyd` front) listening on `127.0.0.1:11434` only,
+   never on `0.0.0.0` or a routable interface.
+2. **Kernel filter counters** — `iptables -L OUTPUT -v -n` reports
+   non-zero packets on the loopback ACCEPT rule and zero packets on
+   the non-loopback REJECT rule, meaning legitimate local traffic is
+   passing and no client has ever attempted an off-host destination.
+3. **Cross-host probe** — an external `curl http://<VM-IP>:11434/`
+   from the hypervisor host is refused at the kernel filter,
+   independent of any application setting.
+
+`StopWhenUnneeded` additionally returns the AI subsystem to its idle
+memory baseline after each session.
+
+## AI layer — knowledge-base extensibility
+
+The `aiobi_term.knowledge` package is designed to grow without
+touching the engine:
+
+- **Add a rule** — append one `Rule(...)` entry to the relevant
+  `rules/<category>.py` module, then add one message key for each
+  supported language in `i18n.py`.
+- **Add a language** — add one new dictionary to the `TRANSLATIONS`
+  map in `i18n.py`; the `Translator` picks it up automatically from
+  `LANG` / `LC_MESSAGES`.
+- **Add a category** — create a new `rules/<name>.py` module exposing
+  `RULES: tuple[Rule, ...]`, add a matching value to the `Category`
+  enum in `rule.py`, then register the module in `loader.py` (one
+  import + one line in `_ALL`).
+
+The engine, matcher, and template renderer never need to change to
+extend coverage. See `aiobi-term/README.md` and the
+`Engineering_Research_LogBook/Log_of_day_6.md` companion log in the
+guidance repository for the design walkthrough.
 
 ## Design tokens
 
