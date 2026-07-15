@@ -15,6 +15,14 @@ conversation with a local language model.
 - **Human confirmation for every command.** `aiobi-term --cmd` prints
   the suggestion; the user decides whether to run it. `aiobi-term`
   itself never executes shell commands.
+- **Destructive-pattern guardrail.** The CODE_SYSTEM prompt asks the
+  model to prefix destructive suggestions with `# `. Because a 1.5B
+  model does not always comply, `do_command` runs a regex safety net
+  after `strip_fences()`: any output matching a known dangerous
+  pattern (`rm -rf`, `dd of=/dev/`, `mkfs`, `chmod 777 /`, recursive
+  `chown` on system paths, `shutdown`, fork bomb, `curl … | sh`, etc.)
+  is *replaced* with a warning comment. Zero accidental execution of
+  a paste from `aiobi-term`.
 
 ## Files
 
@@ -57,12 +65,21 @@ absence of a code-tuned model with:
 
 - **Deterministic decoding** — `temperature=0`, `top_k=1`, `top_p=0.1`,
   so the same request produces the same command.
-- **Few-shot prompt** — the `CODE_SYSTEM` prompt embeds four
+- **Few-shot prompt** — the `CODE_SYSTEM` prompt embeds six
   request-to-command examples (list services, disk free, top by memory,
-  destructive request) to anchor the output shape.
+  list listening TCP ports via `ss`, delete-log destructive warning,
+  format-disk destructive warning, wipe-disk destructive warning) plus
+  an explicit clause that steers toward modern Ubuntu 24.04 tools
+  (`ss` over `netstat`, `ip` over `ifconfig`, `dig` over `nslookup`,
+  `journalctl` over `/var/log` tailing).
 - **Post-processing** — `strip_fences()` removes markdown fences,
   wrapping backticks, leading `$`, and trailing prose, then collapses
   the response to its first non-empty line.
+- **Destructive-pattern guardrail** — `is_destructive()` runs a regex
+  safety net (see the Design section above) that replaces the model's
+  output with a warning comment whenever a known dangerous pattern
+  (`rm -rf`, `dd of=/dev/`, `mkfs`, `chmod 777 /`, `chown -R … /etc`,
+  `shutdown`, fork bomb, `curl … | sh`) slips through the prompt.
 
 The model is pulled once at first boot by `aiobi-ollama-firstpull.service`
 (registered by `15-install-ollama.sh`) alongside

@@ -26,6 +26,13 @@
 #   * user confirmation is required for every shell command: the model
 #     returns a suggestion, aiobi-term prints it, and the user decides
 #     whether to run it. aiobi-term itself does NOT execute the suggestion.
+#   * destructive-pattern guardrail: the CODE_SYSTEM prompt asks the
+#     model to prefix destructive suggestions with '# '. A 1.5B model
+#     does not always comply. When the stripped output matches a known
+#     dangerous pattern (rm -rf, dd of=/dev/, mkfs, chmod 777 /, fork
+#     bomb, curl | sh, etc.) and is not already commented, do_command
+#     REPLACES the output with a warning line. Zero accidental
+#     execution of a paste from aiobi-term.
 
 import argparse
 import json
@@ -50,6 +57,9 @@ CODE_SYSTEM = (
     "safe shell command for Ubuntu 24.04. Output ONLY the command, on "
     "one line, with no explanation, no markdown, no code fence, no "
     "leading '$', no trailing comment, no trailing punctuation. "
+    "Prefer modern Ubuntu 24.04 tools over deprecated ones: use ss "
+    "instead of netstat, ip instead of ifconfig, dig instead of "
+    "nslookup, journalctl instead of tailing /var/log directly. "
     "If the request is destructive or ambiguous, output a single line "
     "starting with '# ' followed by a one-sentence warning instead of "
     "a command.\n"
@@ -64,8 +74,17 @@ CODE_SYSTEM = (
     "Request: top 10 processes by memory usage\n"
     "Command: ps aux --sort=-%mem | head -n 11\n"
     "\n"
+    "Request: list all listening TCP ports\n"
+    "Command: ss -tln\n"
+    "\n"
+    "Request: delete every log file in /var/log\n"
+    "Command: # destructive; wholesale removal of /var/log breaks audit trails, name the specific file first\n"
+    "\n"
     "Request: format /dev/sda\n"
-    "Command: # destructive; specify filesystem and confirm the target device first"
+    "Command: # destructive; run lsblk first, confirm the target device, then use mkfs with the intended filesystem\n"
+    "\n"
+    "Request: wipe the second disk with zeros\n"
+    "Command: # destructive; dd of=/dev/<device> is unrecoverable, verify with lsblk that no partitions are mounted"
 )
 
 CMD_DECODING_OPTIONS = {
@@ -74,6 +93,48 @@ CMD_DECODING_OPTIONS = {
     "top_p": 0.1,
     "num_predict": 128,
 }
+
+# Safety net for --cmd mode. The CODE_SYSTEM prompt already asks the
+# model to prefix destructive suggestions with '# ', but a 1.5B model
+# does not reliably generalise the pattern to every destructive shape.
+# When the stripped model output matches one of these patterns and is
+# not already commented, do_command() replaces the raw command with a
+# warning line — the user must then rephrase or type the command
+# manually. Zero accidental execution of a paste from aiobi-term.
+DESTRUCTIVE_PATTERNS = (
+    (re.compile(r"\brm\s+(-[a-zA-Z]*[rRfF]|--recursive|--force)\b"),
+     "recursive or forced rm"),
+    (re.compile(r"\bdd\s+.*\bof=/dev/"),
+     "dd writing to a raw device"),
+    (re.compile(r"\bmkfs\.[a-z0-9]+\b"),
+     "filesystem format (mkfs)"),
+    (re.compile(r"\bfdisk\s+/dev/"),
+     "fdisk on a raw device"),
+    (re.compile(r"\bchmod\s+(-R\s+)?[0-7]?[67][0-7]{2}\s+/"),
+     "chmod with world-write on a system path"),
+    (re.compile(r"\bchown\s+-R\s+\S+\s+/(?!home)"),
+     "recursive chown on a system path"),
+    (re.compile(r"^\s*>\s*/etc/"),
+     "redirect that would truncate an /etc/ file"),
+    (re.compile(r"\b(shutdown|reboot|poweroff|halt)\b"),
+     "system power state change"),
+    (re.compile(r":\(\)\s*\{[^}]*\|:[^}]*\}"),
+     "fork bomb"),
+    (re.compile(r"(wget|curl)\s[^|]*\|\s*(sh|bash)"),
+     "piping remote content directly to a shell"),
+)
+
+
+def is_destructive(command: str):
+    """Return the destructive reason string if the command matches a
+    known dangerous pattern, else None. A command already commented
+    out (leading '#') is treated as pre-warned and returned as safe."""
+    if not command or command.lstrip().startswith("#"):
+        return None
+    for pattern, reason in DESTRUCTIVE_PATTERNS:
+        if pattern.search(command):
+            return reason
+    return None
 
 
 def call_ollama(system: str, prompt: str, options: dict | None = None,
@@ -142,7 +203,17 @@ def strip_fences(text: str) -> str:
 
 def do_command(request: str) -> None:
     response = call_ollama(CODE_SYSTEM, request, options=CMD_DECODING_OPTIONS)
-    print(strip_fences(response))
+    cmd = strip_fences(response)
+    reason = is_destructive(cmd)
+    if reason:
+        print(
+            f"# WARNING: destructive pattern detected ({reason}). "
+            f"aiobi-term will not print the raw command. Rephrase the "
+            f"request to be more specific, or type the command manually "
+            f"after verifying the target."
+        )
+    else:
+        print(cmd)
 
 
 def do_chat(question: str) -> None:
