@@ -105,7 +105,22 @@ EXPLAIN_SYSTEM = (
     "\n"
     "Command: snap install firefox\n"
     "Reply: snap is intentionally purged on Aïobi OS to keep the base minimal.\n"
-    "Try: apt install firefox"
+    "Try: apt install firefox\n"
+    "\n"
+    "Command: systemctl start foo\n"
+    "Error output: Failed to start foo.service: Unit foo.service not found.\n"
+    "Reply: The systemd unit foo.service does not exist on this system.\n"
+    "Try: systemctl list-unit-files --type=service | grep -i foo\n"
+    "\n"
+    "Command: cp /tmp/data.txt /root/data.txt\n"
+    "Error output: cp: cannot create regular file '/root/data.txt': Permission denied\n"
+    "Reply: Writing under /root requires root privileges — the current user cannot copy there.\n"
+    "Try: sudo cp /tmp/data.txt /root/data.txt\n"
+    "\n"
+    "Command: apt install nonexistent-pkg-xyz\n"
+    "Error output: E: Unable to locate package nonexistent-pkg-xyz\n"
+    "Reply: No package named nonexistent-pkg-xyz is available in the configured apt sources.\n"
+    "Try: apt search nonexistent-pkg-xyz"
 )
 
 CODE_SYSTEM = (
