@@ -51,35 +51,68 @@ OLLAMA_ENDPOINT = "http://127.0.0.1:11434/api/generate"
 MODEL = "qwen2.5:1.5b"
 
 CHAT_SYSTEM = (
-    "You are the Aïobi terminal assistant, the built-in AI of Aïobi OS. "
-    "Answer the user's question concisely and in the language they used. "
-    "If they ask about system administration, prefer Ubuntu 24.04 conventions."
+    "You are the Aïobi terminal assistant, the built-in AI of Aïobi OS "
+    "(built on Ubuntu 24.04, GNOME 46, systemd). Answer the user's "
+    "question concisely and in the language they used. Prefer Aïobi OS "
+    "and Ubuntu 24.04 conventions when advising on system administration."
 )
 
 EXPLAIN_SYSTEM = (
-    "You help the user understand why a shell command may have failed or "
-    "may not work on Ubuntu 24.04 (GNOME 46, systemd). Given a command "
-    "they ran, briefly explain the likely cause of the failure and "
-    "propose one corrected one-liner alternative. Reply in the language "
-    "the user writes. Keep the answer to at most three short sentences. "
-    "Use this format:\n"
-    "  Line 1: what went wrong (one sentence)\n"
-    "  Line 2: 'Try: ' followed by the corrected shell command (no fence, "
-    "no backticks, no leading '$')\n"
-    "If the command looks correct for Ubuntu 24.04 and no failure mode "
-    "is apparent, say so briefly instead of inventing a bug. Prefer "
-    "modern tools: ss over netstat, ip over ifconfig, dig over nslookup, "
-    "journalctl over tailing /var/log."
+    "You are the Aïobi OS (built on Ubuntu 24.04) terminal assistant. "
+    "The user just ran a shell command that failed. Explain the most "
+    "likely cause in ONE sentence and propose ONE corrected shell "
+    "command. Reply in the language the user writes.\n"
+    "\n"
+    "Known failure modes on Aïobi OS you must recognise on sight:\n"
+    "  * net-tools removed — netstat, ifconfig, route, arp are NOT "
+    "installed. Use ss, ip, ip route, ip neigh.\n"
+    "  * dnsutils replaced — nslookup is not shipped. Use dig or host "
+    "(bind9-dnsutils).\n"
+    "  * snap purged — any 'snap install' fails on Aïobi OS. Use apt "
+    "or flatpak.\n"
+    "  * LibreOffice purged — 'libreoffice', 'soffice' are gone. Use "
+    "'onlyoffice-desktopeditors'.\n"
+    "  * Wayland default session — xdotool, wmctrl, xrandr often do "
+    "nothing under Wayland; suggest the GNOME equivalent.\n"
+    "\n"
+    "Reply format — exactly two lines:\n"
+    "  Line 1: one-sentence cause (in the user's language)\n"
+    "  Line 2: 'Try: ' followed by the corrected shell command (no "
+    "backticks, no fence, no leading '$')\n"
+    "\n"
+    "Do NOT invent failure modes: if the command looks correct on Aïobi "
+    "OS and none of the known failure modes above apply, reply with one "
+    "line: 'This command looks correct on Aïobi OS — check the arguments "
+    "or the target's state.'\n"
+    "\n"
+    "Examples:\n"
+    "\n"
+    "Command: netstat -tuln\n"
+    "Reply: netstat is not available on Aïobi OS — net-tools was removed in Ubuntu 24.04.\n"
+    "Try: ss -tuln\n"
+    "\n"
+    "Command: ifconfig eth0\n"
+    "Reply: ifconfig is not available on Aïobi OS — iproute2 replaces net-tools.\n"
+    "Try: ip addr show eth0\n"
+    "\n"
+    "Command: nslookup example.com\n"
+    "Reply: nslookup is not shipped on Aïobi OS — use dig from bind9-dnsutils.\n"
+    "Try: dig example.com\n"
+    "\n"
+    "Command: snap install firefox\n"
+    "Reply: snap is intentionally purged on Aïobi OS to keep the base minimal.\n"
+    "Try: apt install firefox"
 )
 
 CODE_SYSTEM = (
     "You translate the user's natural-language request into a single "
-    "safe shell command for Ubuntu 24.04. Output ONLY the command, on "
-    "one line, with no explanation, no markdown, no code fence, no "
-    "leading '$', no trailing comment, no trailing punctuation. "
-    "Prefer modern Ubuntu 24.04 tools over deprecated ones: use ss "
-    "instead of netstat, ip instead of ifconfig, dig instead of "
-    "nslookup, journalctl instead of tailing /var/log directly. "
+    "safe shell command for Aïobi OS (built on Ubuntu 24.04). Output "
+    "ONLY the command, on one line, with no explanation, no markdown, "
+    "no code fence, no leading '$', no trailing comment, no trailing "
+    "punctuation. Prefer modern Aïobi OS / Ubuntu 24.04 tools over "
+    "deprecated ones: use ss instead of netstat, ip instead of "
+    "ifconfig, dig instead of nslookup, journalctl instead of tailing "
+    "/var/log directly, apt or flatpak instead of snap. "
     "If the request is destructive or ambiguous, output TWO lines: "
     "first a warning line starting with '# ' and a one-sentence "
     "justification, then the actual shell command on the second line. "
@@ -255,13 +288,13 @@ def do_chat(question: str) -> None:
 
 def do_explain(command: str) -> None:
     """Software-intelligence wrapper: the user pastes (or the shell
-    integration passes) a shell command that failed or that they suspect
-    will fail. The chat model reasons about the failure mode on Ubuntu
-    24.04 and proposes a corrected alternative. No re-execution: the
-    model reasons from the command shape alone, which is safe (no side
+    integration passes) a shell command that failed. The chat model
+    reasons about the failure mode on Aïobi OS (built on Ubuntu 24.04)
+    and proposes a corrected alternative. No re-execution: the model
+    reasons from the command shape alone, which is safe (no side
     effects) and enough to catch the common failure modes (deprecated
     tools, missing packages, wrong flags, permission issues)."""
-    prompt = f"The following shell command was just run on Ubuntu 24.04 and failed or is expected to fail:\n\n    {command}\n\nExplain the likely cause and propose a corrected alternative."
+    prompt = f"Command: {command}"
     response = call_ollama(EXPLAIN_SYSTEM, prompt)
     print(response)
 
