@@ -40,6 +40,15 @@ RELEASE_URL="https://github.com/home-sweet-gnome/dash-to-panel/releases/latest/d
 
 echo "==> Aïobi — 01-install-extensions.sh"
 
+# Ensure the Ubuntu universe repo is enabled. dash-to-panel lives there on
+# Ubuntu 24.04, and so do vlc / flameshot / wine consumed by later scripts.
+# Cubic's minimal chroot base may ship with universe disabled — enable
+# idempotently so `apt-get install` finds an installable candidate.
+if ! grep -q "^Components:.*universe" /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq software-properties-common
+    add-apt-repository -y universe
+fi
+
 # Refresh apt index quietly; ignore failure (offline build host case)
 apt-get update -qq || true
 
