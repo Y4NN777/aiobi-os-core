@@ -35,8 +35,15 @@ from gi.repository import Adw, Gtk, Gdk, GLib  # noqa: E402
 APP_ID_PREFIX = "org.aiobi.Update"
 REBOOT_REQUIRED_FLAG = "/var/run/reboot-required"
 
+# aiobi-accent used for readable label text on the popup surface. Aiobi
+# Primary Violet #7233CD failed contrast against libadwaita's dark surface
+# tones (~#242424) that the popup inherits, so labels were hard to read on
+# the user's VM. Switched to Aiobi Primary White #F8F8F9 — legible on both
+# dark and light color-schemes and stays on the documented brand palette.
+# NOTE: CSS below is a bytes literal (Gtk.CssProvider.load_from_data
+# requires bytes) so it MUST stay ASCII-only.
 CSS = b"""
-.aiobi-accent { color: #7233CD; }
+.aiobi-accent { color: #F8F8F9; }
 .aiobi-primary { background: #7233CD; color: #F8F8F9; }
 """
 
