@@ -5,7 +5,7 @@
 # Purpose : generate /usr/share/backgrounds/aiobi/aiobi-slideshow.xml from
 #           every PNG present at /usr/share/backgrounds/aiobi/, so the
 #           GNOME wallpaper crossfades through the Aïobi brand image set
-#           every 30 min instead of remaining fixed on a single image.
+#           on a timed cadence instead of remaining fixed on a single image.
 #
 # Format  : GNOME's native XML slideshow schema (documented since
 #           gnome-shell 3.x, still current in GNOME 46). A <background>
@@ -15,13 +15,15 @@
 #           third-party wallpaper changer needed — the compositor
 #           renders the crossfade natively.
 #
-# Timing  : each image displays for 1255 s (~21 min) then a 5 s crossfade
-#           bridges to the next → 21 min per wallpaper, N × 21 min for
-#           one full loop. 20 assets → 7 h full loop (user preference:
-#           30 min per slide = 10 h loop was too long, 3 min per slide
-#           was too short, 21 min lands the full loop at 7 h — enough
-#           transitions in a work day to feel dynamic without the
-#           wallpaper changing distractingly often).
+# Timing  : SLIDE_SECONDS below is the single knob controlling cadence.
+#           Each slide occupies (SLIDE_SECONDS - CROSSFADE_SECONDS) seconds
+#           of static display then a CROSSFADE_SECONDS crossfade bridges
+#           to the next. N slides at SLIDE_SECONDS each = one full loop.
+#           Current choice: 3600 s per slide (1 h) — 20 assets → 20 h
+#           full loop. Iterations tried: 30 min per slide (10 h loop, too
+#           short), 3 min per slide (1 h loop, too fast), 21 min per
+#           slide (7 h loop, still fast for the user's taste), 1 h per
+#           slide (20 h loop — accepted).
 #
 # The referenced XML is consumed by config/aiobi-wallpaper.dconf which
 # script 06 installs as /etc/dconf/db/local.d/00-aiobi-wallpaper. If
@@ -38,6 +40,11 @@
 set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "ERROR: must run as root (sudo)"; exit 1; }
+
+# --- Timing knobs — change these to retune the cadence ---------------------
+SLIDE_SECONDS=3600         # 1 h per slide (including the crossfade below)
+CROSSFADE_SECONDS=5        # 5 s crossfade between slides
+STATIC_SECONDS=$(( SLIDE_SECONDS - CROSSFADE_SECONDS ))
 
 BG_DIR=/usr/share/backgrounds/aiobi
 XML_OUT="$BG_DIR/aiobi-slideshow.xml"
@@ -84,11 +91,11 @@ echo "  found $N wallpaper(s), generating slideshow manifest..."
             current="${PNGS[$i]}"
             next="${PNGS[$(( (i + 1) % N ))]}"
             printf '  <static>\n'
-            printf '    <duration>1255.0</duration>\n'
+            printf '    <duration>%d.0</duration>\n' "$STATIC_SECONDS"
             printf '    <file>%s</file>\n' "$current"
             printf '  </static>\n'
             printf '  <transition type="overlay">\n'
-            printf '    <duration>5.0</duration>\n'
+            printf '    <duration>%d.0</duration>\n' "$CROSSFADE_SECONDS"
             printf '    <from>%s</from>\n' "$current"
             printf '    <to>%s</to>\n' "$next"
             printf '  </transition>\n'
@@ -100,6 +107,14 @@ echo "  found $N wallpaper(s), generating slideshow manifest..."
 
 chmod 0644 "$XML_OUT"
 
-echo "==> 05b done — $XML_OUT written ($N image(s), 30 min per slide, 5 s crossfade)"
+# Derive the human-readable cadence from the timing knobs so the message
+# stays truthful when SLIDE_SECONDS is edited above.
+slide_min=$(( SLIDE_SECONDS / 60 ))
+loop_total_min=$(( N * SLIDE_SECONDS / 60 ))
+loop_h=$(( loop_total_min / 60 ))
+loop_m=$(( loop_total_min % 60 ))
+
+echo "==> 05b done — $XML_OUT written"
+echo "    $N image(s), $slide_min min per slide, ${CROSSFADE_SECONDS} s crossfade"
 echo "    Effect on installed VM: desktop + lock screen crossfade through"
-echo "    all Aïobi wallpapers on a $((N * 30 / 60)) h $((N * 30 % 60)) min loop."
+echo "    all Aïobi wallpapers on a ${loop_h} h ${loop_m} min loop."
