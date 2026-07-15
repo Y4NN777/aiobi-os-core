@@ -54,6 +54,47 @@ EXIT_CONFIG_ERROR = 10
 _DEFER_PATTERN = re.compile(r"^(\d+)\s*([hHdD])$")
 
 
+def _has_gui() -> bool:
+    """Return True only if a GTK popup can realistically render — i.e.
+    a display server is reachable AND a session bus address is set.
+    Both are stripped when a normal user runs `sudo aiobi-update` without
+    -E, so this returns False in that case and the caller falls back
+    to a TTY prompt or non-interactive mode."""
+    import os
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return False
+    if not os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+        return False
+    return True
+
+
+def _require_root(op: str, invoc: str) -> int | None:
+    """Print a clean error and return an exit code if we need root but
+    are not root. Avoids leaking raw apt 'Permission denied on
+    /var/lib/apt/lists/lock' when the user forgot sudo."""
+    import os
+    if os.geteuid() != 0:
+        print(f"aiobi-update: '{op}' requires root privileges.", file=sys.stderr)
+        print(f"Try: sudo {invoc}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    return None
+
+
+def _tty_confirm(count: int) -> bool:
+    """Terminal fallback for the GTK confirm dialog when no display
+    session is available (typical when the user ran with sudo)."""
+    if not sys.stdin.isatty():
+        print("aiobi-update: no display session and no TTY — pass -y to auto-confirm.",
+              file=sys.stderr)
+        return False
+    try:
+        reply = input(f"Install {count} update(s)? [y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return reply in ("y", "yes")
+
+
 def _log(message: str) -> None:
     """Append a timestamped line to /var/log/aiobi-update.log. Rotated
     by etc/logrotate.d/aiobi-update. Best-effort: a logging failure
@@ -85,6 +126,9 @@ def cmd_status(_args: argparse.Namespace) -> int:
 
 
 def cmd_check(_args: argparse.Namespace) -> int:
+    rc = _require_root("--check", "aiobi-update --check")
+    if rc is not None:
+        return rc
     try:
         pol = policy_mod.load_policy()
     except policy_mod.PolicyError as exc:
@@ -133,30 +177,45 @@ def _do_apply(pol, packages: list[str], assume_yes: bool, show_gui: bool):
     """Shared apply path for the interactive (--apply) and, if ever
     invoked without --security-only, non-security automated path.
     Returns (succeeded, failed)."""
-    from . import popup  # imported lazily: GTK is only needed here
+    # Downgrade to TTY prompt when GUI was requested but no display
+    # session is reachable — typical when sudo strips DISPLAY and
+    # DBUS_SESSION_BUS_ADDRESS. Prevents GTK from spamming X11/MESA
+    # errors and hanging waiting for a bus that will never answer.
+    if show_gui and not _has_gui():
+        show_gui = False
 
-    if show_gui and not assume_yes:
-        if not popup.confirm(len(packages)):
-            _log("--apply: cancelled by user at confirm dialog")
-            return [], []
-
-    def worker():
-        succeeded, failed = apt.upgrade_packages(packages)
-        return popup.ApplyResult(succeeded, failed, apt.reboot_required())
+    if not assume_yes:
+        if show_gui:
+            from . import popup  # lazy: GTK imported only in GUI path
+            if not popup.confirm(len(packages)):
+                _log("--apply: cancelled by user at confirm dialog")
+                return [], []
+        else:
+            if not _tty_confirm(len(packages)):
+                _log("--apply: cancelled at TTY prompt")
+                return [], []
 
     if show_gui and pol.show_progress:
+        from . import popup
+        def worker():
+            succ, fail = apt.upgrade_packages(packages)
+            return popup.ApplyResult(succ, fail, apt.reboot_required())
         result = popup.run_with_progress(worker)
         succeeded, failed = result.succeeded, result.failed
     else:
         succeeded, failed = apt.upgrade_packages(packages)
 
     if show_gui and pol.show_summary:
+        from . import popup
         popup.summary(succeeded, failed, apt.reboot_required())
 
     return succeeded, failed
 
 
 def cmd_apply(args: argparse.Namespace) -> int:
+    rc = _require_root("--apply", "aiobi-update --apply")
+    if rc is not None:
+        return rc
     try:
         pol = policy_mod.load_policy()
     except policy_mod.PolicyError as exc:
