@@ -97,7 +97,19 @@ LIB_DIR=/usr/local/lib/aiobi-update
 [ -f "$SRC_LOGROTATE" ]    || { echo "ERROR: $SRC_LOGROTATE missing"; exit 2; }
 [ -f "$SRC_PIN" ]          || { echo "ERROR: $SRC_PIN missing"; exit 2; }
 
-# ----- 2) Purge conflicting Ubuntu native update GUIs -----------------------
+# ----- 2a) DEFENSIVE — repair hook file + helper BEFORE any apt call --------
+# If a previous run left a broken /etc/apt/apt.conf.d/52-aiobi-update-hooks
+# in place (or if the file references /usr/local/lib/aiobi-update/hook.sh
+# which does not yet exist), every subsequent apt-get invocation aborts
+# with a parser error, killing this script at step 3 (apt install). Land
+# the current hook file + helper script first so the file on disk always
+# points at a valid, existing script by the time we touch apt.
+install -d -m 0755 "$LIB_DIR"
+install -m 0755 "$SRC_HOOK_SCRIPT" "$LIB_DIR/hook.sh"
+install -m 0644 "$SRC_APT_HOOK" /etc/apt/apt.conf.d/52-aiobi-update-hooks
+echo "  hook file + helper installed early (self-repair against broken prior state)"
+
+# ----- 2b) Purge conflicting Ubuntu native update GUIs ----------------------
 # Ubuntu ships update-manager (the "Software Updater" popup) and
 # software-properties-gtk (the "Software & Updates" settings panel). Both
 # fail on Aïobi because they depend on the apport/whoopsie stack that
