@@ -25,6 +25,7 @@ from aiobi_term.knowledge.rules import (
     network_errors,
     package_mgr,
     python_errors,
+    shell_builtins,
     ssh_errors,
     systemd_errors,
     xorg_wayland,
@@ -43,6 +44,7 @@ _ALL: tuple[Rule, ...] = (
     *ssh_errors.RULES,
     *docker_errors.RULES,
     *xorg_wayland.RULES,
+    *shell_builtins.RULES,
 )
 
 

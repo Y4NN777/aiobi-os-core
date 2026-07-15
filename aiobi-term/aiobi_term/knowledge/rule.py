@@ -43,6 +43,7 @@ class Category(str, Enum):
     SSH_ERROR       = "ssh-error"
     DOCKER_ERROR    = "docker-error"
     DISPLAY_ERROR   = "display-error"
+    SHELL_BUILTIN   = "shell-builtin"
 
 
 @dataclass(frozen=True)

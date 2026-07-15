@@ -201,6 +201,12 @@ MESSAGES_EN: dict[str, str] = {
         "session by default; use the GNOME-native equivalent or start an X11 "
         "session explicitly if you must.",
 
+    # ---- shell-builtin ----
+    "builtin.no_failure":
+        "This is a bash builtin — it usually succeeds silently on valid input. "
+        "If you saw a specific error, pass it via --error for a tighter "
+        "diagnosis.",
+
     # ---- generic fallbacks (used when only a broad match is possible) ----
     "generic.command_not_found":
         "The binary is not installed on Aïobi OS — search for the providing "
@@ -387,6 +393,12 @@ MESSAGES_FR: dict[str, str] = {
         "Cet outil est conçu pour le protocole X11 — Aïobi OS lance une session "
         "Wayland par défaut ; utilise l'équivalent GNOME natif, ou démarre "
         "explicitement une session X11 si nécessaire.",
+
+    # ---- shell-builtin ----
+    "builtin.no_failure":
+        "C'est une commande interne du shell bash — elle réussit généralement "
+        "en silence sur une entrée valide. Si tu as vu une erreur précise, "
+        "passe-la via --error pour un diagnostic plus fin.",
 
     # ---- generic fallbacks ----
     "generic.command_not_found":

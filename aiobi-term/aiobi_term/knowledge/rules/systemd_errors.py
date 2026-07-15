@@ -24,7 +24,7 @@ RULES: tuple[Rule, ...] = (
             error_regex=re.compile(r"unit .* not found", re.IGNORECASE),
         ),
         cause_key="systemd.unit_not_found",
-        try_template="systemctl list-unit-files --type=service | grep -i {arg1}",
+        try_template="systemctl list-unit-files --type=service | grep -i {arg2}",
         confidence=9,
     ),
     Rule(
