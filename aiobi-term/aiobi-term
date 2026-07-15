@@ -151,6 +151,17 @@ CMD_DECODING_OPTIONS = {
     "num_predict": 128,
 }
 
+# Deterministic decoding for --explain, matching --cmd. The explain
+# output is a strict two-line format (cause + "Try: <cmd>"), so we
+# clamp the length and drop sampling stochasticity — the same failed
+# command must always produce the same explanation.
+EXPLAIN_DECODING_OPTIONS = {
+    "temperature": 0,
+    "top_k": 1,
+    "top_p": 0.1,
+    "num_predict": 96,
+}
+
 # Safety net for --cmd mode. The CODE_SYSTEM prompt already asks the
 # model to prefix destructive suggestions with '# ', but a 1.5B model
 # does not reliably generalise the pattern to every destructive shape.
@@ -286,6 +297,36 @@ def do_chat(question: str) -> None:
     print(response)
 
 
+def _format_explain_output(text: str) -> str:
+    """Enforce the EXPLAIN_SYSTEM two-line output contract. A 1.5B model
+    frequently emits extra paragraphs after the required 'Try: ...'
+    line despite explicit instructions; we truncate here so the user
+    sees only the useful signal.
+
+    Rules:
+      * line 1 = first non-empty line (the cause)
+      * line 2 = first subsequent non-empty line that either
+          (a) begins with a common alternative-introducing keyword
+              ('try', 'use', 'instead', 'run', 'alternative', 'correct'), or
+          (b) looks command-shaped: short (< 80 chars) and does not
+              end with terminal punctuation ('.', '!', '?')
+      * if neither is found, keep the cause alone rather than picking
+        an arbitrary prose sentence
+    """
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+    if not lines:
+        return text
+    cause = lines[0]
+    keyword_prefixes = ("try", "use", "instead", "run", "alternative", "correct")
+    def _looks_like_alt(line: str) -> bool:
+        lower = line.lower().lstrip()
+        if lower.startswith(keyword_prefixes):
+            return True
+        return len(line) < 80 and not line.rstrip().endswith((".", "!", "?"))
+    alt_line = next((ln for ln in lines[1:] if _looks_like_alt(ln)), None)
+    return f"{cause}\n{alt_line}" if alt_line else cause
+
+
 def do_explain(command: str) -> None:
     """Software-intelligence wrapper: the user pastes (or the shell
     integration passes) a shell command that failed. The chat model
@@ -293,10 +334,13 @@ def do_explain(command: str) -> None:
     and proposes a corrected alternative. No re-execution: the model
     reasons from the command shape alone, which is safe (no side
     effects) and enough to catch the common failure modes (deprecated
-    tools, missing packages, wrong flags, permission issues)."""
+    tools, missing packages, wrong flags, permission issues).
+
+    Uses deterministic decoding + post-processing to enforce the
+    two-line output contract."""
     prompt = f"Command: {command}"
-    response = call_ollama(EXPLAIN_SYSTEM, prompt)
-    print(response)
+    response = call_ollama(EXPLAIN_SYSTEM, prompt, options=EXPLAIN_DECODING_OPTIONS)
+    print(_format_explain_output(response))
 
 
 def do_repl() -> None:
