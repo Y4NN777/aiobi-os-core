@@ -24,7 +24,6 @@
 #   19 tune-ram                        zRAM swap + Ollama socket activation
 #   20 ai-firewall                     iptables/ip6tables OUTPUT REJECT :11434 non-loopback
 #   21 configure-bash-completion       TAB menu-complete + argcomplete + skel setup
-#   22 taskbar-desktop-defaults        Ding install + taskbar pins + skel/Desktop
 #   06 apply-persistence               dconf locks + skel + fonts — LAST (seals state)
 #   09 terminal-profile                gnome-terminal Aïobi palette (verifies compiled db)
 #      validate                        harness over scripts/tests/*.sh (no numeric
@@ -100,12 +99,6 @@ run_step 20-ai-firewall.sh
 # user's shell. Placed before 06-apply-persistence.sh because 06 copies skel
 # into the sealed image state.
 run_step 21-configure-bash-completion.sh
-
-# UX layer — Windows-familiar defaults: install Ding for desktop icons,
-# preseed taskbar pins (org.gnome.shell favorite-apps) + Ding config +
-# a curated set of .desktop shortcuts in /etc/skel/Desktop/. Placed
-# before 06 because it writes a dconf keyfile 06 will compile.
-run_step 22-taskbar-desktop-defaults.sh
 
 # Persistence — dconf profile + keyfiles (branding, wallpaper, panel, terminal)
 # + locks + /etc/skel. This step installs every system dconf keyfile and
