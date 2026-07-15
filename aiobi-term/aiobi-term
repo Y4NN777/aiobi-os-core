@@ -7,10 +7,10 @@
 #   aiobi-term "<question>"          conversational   (chat system prompt)
 #   aiobi-term --cmd "<request>"     shell command    (cmd system prompt +
 #                                                     deterministic decoding)
-#   aiobi-term --explain "<cmd>"     failure analysis (chat with explain
-#                                                     system prompt, no
-#                                                     re-execution of the
-#                                                     command)
+#   aiobi-term --explain "<cmd>"                      failure analysis from
+#     [--error "<stderr>"]                            command shape (and
+#                                                     optionally stderr) —
+#                                                     no re-execution
 #   aiobi-term --chat                interactive REPL
 #
 # Model
@@ -84,6 +84,10 @@ EXPLAIN_SYSTEM = (
     "OS and none of the known failure modes above apply, reply with one "
     "line: 'This command looks correct on Aïobi OS — check the arguments "
     "or the target's state.'\n"
+    "\n"
+    "When an 'Error output:' section is included in the input, treat it "
+    "as the actual shell error and prioritise it over any inferred cause "
+    "— the error text is ground truth.\n"
     "\n"
     "Examples:\n"
     "\n"
@@ -327,18 +331,31 @@ def _format_explain_output(text: str) -> str:
     return f"{cause}\n{alt_line}" if alt_line else cause
 
 
-def do_explain(command: str) -> None:
-    """Software-intelligence wrapper: the user pastes (or the shell
-    integration passes) a shell command that failed. The chat model
-    reasons about the failure mode on Aïobi OS (built on Ubuntu 24.04)
-    and proposes a corrected alternative. No re-execution: the model
-    reasons from the command shape alone, which is safe (no side
-    effects) and enough to catch the common failure modes (deprecated
-    tools, missing packages, wrong flags, permission issues).
+def do_explain(command: str, error: str = "") -> None:
+    """Software-intelligence wrapper: the user pastes a shell command
+    that failed (and optionally the stderr/error output from the shell)
+    and the chat model reasons about the failure mode on Aïobi OS
+    (built on Ubuntu 24.04) and proposes a corrected alternative.
+
+    Two invocation shapes:
+      * `aiobi-term --explain "<cmd>"` — command shape only, model reasons
+        from the command name alone. Sufficient for well-known deprecated
+        tools (netstat, ifconfig, snap install ...).
+      * `aiobi-term --explain "<cmd>" --error "<stderr text>"` — command
+        + actual shell error output. Massively improves diagnosis for
+        opaque failures (permission denied, connection refused, config
+        syntax errors) where the command shape alone is not enough.
+
+    No re-execution: the model reasons from the provided inputs, which
+    is safe (no side effects) and avoids re-triggering time-consuming
+    or destructive commands.
 
     Uses deterministic decoding + post-processing to enforce the
     two-line output contract."""
-    prompt = f"Command: {command}"
+    if error:
+        prompt = f"Command: {command}\nError output: {error}"
+    else:
+        prompt = f"Command: {command}"
     response = call_ollama(EXPLAIN_SYSTEM, prompt, options=EXPLAIN_DECODING_OPTIONS)
     print(_format_explain_output(response))
 
@@ -373,8 +390,14 @@ def main() -> int:
                         help="Start an interactive chat REPL.")
     parser.add_argument("--explain", action="store_true",
                         help="Explain why a shell command may have failed on "
-                             "Ubuntu 24.04 and propose a corrected alternative. "
+                             "Aïobi OS and propose a corrected alternative. "
                              "Pass the failing command as the argument.")
+    parser.add_argument("--error", default="",
+                        help="Optional: the stderr/error text the shell "
+                             "produced when the command failed. Only used "
+                             "with --explain. Passing it improves diagnosis "
+                             "for opaque failures (permission denied, "
+                             "connection refused, config syntax, etc.).")
     parser.add_argument("prompt", nargs="*",
                         help="The question or request. Read from stdin if empty.")
     args = parser.parse_args()
@@ -394,7 +417,7 @@ def main() -> int:
     if args.cmd:
         do_command(request)
     elif args.explain:
-        do_explain(request)
+        do_explain(request, error=args.error)
     else:
         do_chat(request)
     return 0

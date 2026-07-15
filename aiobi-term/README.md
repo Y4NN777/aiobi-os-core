@@ -54,6 +54,9 @@ aiobi-term --cmd "list all listening TCP ports"
 # Explain why a shell command failed and propose an alternative
 aiobi-term --explain "netstat -tuln"
 
+# Same, with the actual shell error output for a tighter diagnosis
+aiobi-term --explain "systemctl start foo" --error "Failed to start foo.service: Unit foo.service not found."
+
 # Interactive chat REPL
 aiobi-term --chat
 
