@@ -42,10 +42,18 @@ isolate-workspaces=false
 isolate-monitors=false
 taskbar-locked=true
 
-# Intellihide enabled — the dock retracts when a window overlaps it,
-# reappears when the pointer approaches the bottom edge. Matches the
-# converged reference VM behaviour.
-intellihide=true
+# Intellihide DISABLED — the dock stays visible on the bottom edge
+# even when a window overlaps it. Fixes the UX-trap identified on
+# the reference VM where users expected the dash-to-panel "Lock
+# taskbar" toggle to keep the dock always visible (Windows-like
+# convention) whereas that toggle actually maps to taskbar-locked
+# (edit protection). Empirical fresh-install verification on RC2
+# 2026-07-16 confirmed the previous intellihide=true default made
+# the dock retract on any window overlap — restoring the always-
+# visible behaviour matches the target UX and closes the gap
+# between the panel keyfile and the design decision recorded in
+# the polish-convergence logbook.
+intellihide=false
 intellihide-behaviour='ALL_WINDOWS'
 intellihide-show-in-fullscreen=true
 intellihide-show-on-notification=true

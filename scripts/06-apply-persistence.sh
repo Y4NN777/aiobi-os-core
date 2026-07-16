@@ -81,6 +81,7 @@ KNOWN_KEYFILES=(
     "00-aiobi-wallpaper"
     "20-aiobi-panel"
     "30-aiobi-terminal"
+    "30-aiobi-taskbar-desktop"
 )
 if [ -d "$DCONF_LOCAL_D" ]; then
     for existing in "$DCONF_LOCAL_D"/*; do
