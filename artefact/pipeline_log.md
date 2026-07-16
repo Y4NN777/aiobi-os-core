@@ -27,7 +27,8 @@ Structure:
 
 ## 1. Build environment
 
-- Host: Ubuntu-based development workstation.
+- Host: Pop!_OS 24.04 development workstation (Ubuntu-derived; provides
+  Cubic + virt-manager + QEMU/KVM + OVMF for UEFI test guests).
 - Tool: Cubic (Custom Ubuntu ISO Creator) — chroot terminal.
 - Base ISO fed to Cubic: prior Aïobi image carrying the identity +
   branding + persistence layer.
