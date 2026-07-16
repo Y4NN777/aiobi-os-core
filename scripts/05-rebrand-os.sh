@@ -193,9 +193,32 @@ if [ -f "$GIS_WELCOME" ]; then
 Hidden=true
 X-GNOME-Autostart-enabled=false
 EOF
-        echo "  gnome-initial-setup-first-login popup disabled"
+        echo "  gnome-initial-setup-first-login popup disabled (autostart Hidden=true)"
     fi
 fi
+
+# Belt-and-suspenders — the autostart Hidden=true above did not prevent
+# the popup on the RC2 fresh install (empirically confirmed 2026-07-16:
+# the "Welcome to Aïobi OS 1.0" splash launched at first login carrying
+# Ubuntu Yaru orange chrome + Numbat mascot despite Hidden=true being
+# present on the autostart entry). Ubuntu's gnome-initial-setup package
+# has multiple triggers beyond XDG autostart; the reliable way to
+# silence the popup is to remove the package entirely, and (as a fallback
+# for the edge case where the purge is not viable) pre-touch the marker
+# file that satisfies AutostartCondition=unless-exists on the autostart
+# entry so any surviving trigger short-circuits itself.
+
+# (a) Purge the package so no trigger can invoke the binary.
+DEBIAN_FRONTEND=noninteractive apt-get purge -y \
+    gnome-initial-setup gnome-initial-setup-icons 2>/dev/null || true
+
+# (b) Ship the "done" marker in /etc/skel so every Subiquity-created
+# user account inherits it — protects against a future package
+# reinstallation that would drop back the autostart entry.
+install -d -m 0755 /etc/skel/.config
+touch /etc/skel/.config/gnome-initial-setup-done
+chmod 0644 /etc/skel/.config/gnome-initial-setup-done
+echo "  gnome-initial-setup purged + skel marker touched (Welcome splash silenced)"
 
 # ----- 9c) GNOME Tour welcome popup kill ------------------------------------
 # /etc/xdg/autostart/org.gnome.Tour.desktop (Ubuntu 24.04 desktop ships this
