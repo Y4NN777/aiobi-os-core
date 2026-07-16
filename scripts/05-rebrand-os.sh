@@ -197,6 +197,30 @@ EOF
     fi
 fi
 
+# ----- 9c) GNOME Tour welcome popup kill ------------------------------------
+# /etc/xdg/autostart/org.gnome.Tour.desktop (Ubuntu 24.04 desktop ships this
+# via the gnome-tour package) autostarts the "Welcome to Aïobi OS" tour
+# on the first user login. It is a separate autostart from
+# gnome-initial-setup-first-login above — that one is the initial-setup
+# wizard, this one is the post-setup "take a tour" splash. Both need to
+# be silenced for a clean first-boot experience. Same Hidden=true survival
+# pattern as the two blocks above. Also disable the alternative name
+# `gnome-tour.desktop` shipped by some Ubuntu variants for good measure.
+for tour in \
+    /etc/xdg/autostart/org.gnome.Tour.desktop \
+    /etc/xdg/autostart/gnome-tour.desktop
+do
+    if [ -f "$tour" ]; then
+        if ! grep -q "^Hidden=true" "$tour"; then
+            tee -a "$tour" > /dev/null << 'EOF'
+Hidden=true
+X-GNOME-Autostart-enabled=false
+EOF
+            echo "  $(basename "$tour") disabled"
+        fi
+    fi
+done
+
 # ----- 10) First-boot systemd oneshot — PRETTY_NAME resilience --------------
 # The Cubic ISO builder overwrites the PRETTY_NAME field of /etc/os-release
 # at ISO generation time with a build-timestamp string. This service reverts
