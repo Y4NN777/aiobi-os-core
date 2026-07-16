@@ -78,9 +78,18 @@ Two consumers share a single locally-bound Ollama daemon:
 | `aiobi-term` (terminal) | `qwen2.5:1.5b`                         | Chat + shell-command extraction                   |
 | AnythingLLM (desktop)   | `qwen3-vl:2b-instruct-q8_0`            | Multi-modal chat (text + image)                   |
 
-Both models are pulled on first boot by `aiobi-ollama-firstpull.service`
-(script `15-install-ollama.sh`), not baked into the ISO. The daemon
-is socket-activated via `systemd-socket-proxyd` on `127.0.0.1:11434`
+Both models ship in the ISO (~3.4 GB of the total image size) so the
+on-device AI is available at first login without network access —
+an air-gapped install has full AI capability from the first user
+session. Script `15-install-ollama.sh` pulls them during the chroot
+build via a manually-started `ollama serve` process, then Cubic
+Generate captures `/usr/share/ollama/.ollama/models/` into the ISO
+squashfs. A defensive `aiobi-ollama-firstpull.service` is registered
+as a fallback that only activates on the edge case where the
+chroot-time pull did not complete (marker file
+`/var/lib/aiobi-ollama-firstpull-done` is touched on successful
+chroot pull to skip it on the installed system). The daemon is
+socket-activated via `systemd-socket-proxyd` on `127.0.0.1:11434`
 → `127.0.0.1:11435` and unloads models after `OLLAMA_KEEP_ALIVE=5m`
 of idleness — zero resident memory when idle.
 
