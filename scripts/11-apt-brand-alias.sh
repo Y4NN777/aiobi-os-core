@@ -68,7 +68,7 @@ if [[ -f "$UBUNTU_SOURCES" ]]; then
     [[ -f "${UBUNTU_SOURCES}.aiobi.bak" ]] || cp "$UBUNTU_SOURCES" "${UBUNTU_SOURCES}.aiobi.bak"
     # Always sed from backup to preserve idempotency
     sed \
-        -e 's|bf\.archive\.ubuntu\.com|mirror.aiobi.local|g' \
+        -e 's|\([a-z][a-z]\.\)\{0,1\}archive\.ubuntu\.com|mirror.aiobi.local|g' \
         -e 's|security\.ubuntu\.com|security.aiobi.local|g' \
         "${UBUNTU_SOURCES}.aiobi.bak" > "$UBUNTU_SOURCES"
     echo "  rewrote $UBUNTU_SOURCES"
@@ -78,7 +78,7 @@ fi
 if [[ -f /etc/apt/sources.list ]] && grep -q "ubuntu\.com" /etc/apt/sources.list; then
     [[ -f /etc/apt/sources.list.aiobi.bak ]] || cp /etc/apt/sources.list /etc/apt/sources.list.aiobi.bak
     sed -i \
-        -e 's|bf\.archive\.ubuntu\.com|mirror.aiobi.local|g' \
+        -e 's|\([a-z][a-z]\.\)\{0,1\}archive\.ubuntu\.com|mirror.aiobi.local|g' \
         -e 's|security\.ubuntu\.com|security.aiobi.local|g' \
         /etc/apt/sources.list
     echo "  rewrote legacy /etc/apt/sources.list"

@@ -58,10 +58,14 @@ else
 fi
 
 # Sed patch must have removed the Yaru magenta base hex from on-disk CSS.
-if grep -Rqi "#B34CB3" "$THEME_DIR/gtk-3.0" "$THEME_DIR/gtk-4.0" 2>/dev/null; then
-    fail "Yaru magenta #B34CB3 removed from on-disk CSS" "still present"
+# Excludes *.magenta.bak files — script 03 keeps those as intentional
+# backups of the pre-sed gresource content, they must contain magenta by
+# design so the pipeline can be rolled back or re-run from a known baseline.
+if grep -Rqi --exclude='*.magenta.bak' \
+    "#B34CB3" "$THEME_DIR/gtk-3.0" "$THEME_DIR/gtk-4.0" 2>/dev/null; then
+    fail "Yaru magenta #B34CB3 removed from on-disk CSS" "still present in a live file"
 else
-    pass "Yaru magenta #B34CB3 removed from on-disk CSS"
+    pass "Yaru magenta #B34CB3 removed from on-disk CSS (backups excluded)"
 fi
 
 finalize
