@@ -1,0 +1,211 @@
+@startuml aiobi-update-class
+' Class diagram of the aiobi_update package — native update manager.
+'
+' Conveys: the module split between the argparse dispatcher (cli.py),
+' the GTK4/libadwaita popup layer (popup.py), the apt subprocess wrapper
+' (apt.py), the /etc/aiobi/update.conf policy loader (policy.py), the
+' JSON state store (state.py), and the notify-send passive-channel
+' helper (notify.py) — plus the two external, non-Python artefacts that
+' close the user -> root privilege boundary: apply-helper.sh (the root-
+' side script pkexec actually execs) and the polkit action
+' com.aiobi.update.apply that authorises it.
+'
+' Every class/function signature below is read directly from source
+' (verified, no invented APIs):
+'   aiobi-update/aiobi_update/cli.py
+'   aiobi-update/aiobi_update/popup.py
+'   aiobi-update/aiobi_update/apt.py
+'   aiobi-update/aiobi_update/policy.py
+'   aiobi-update/aiobi_update/state.py
+'   aiobi-update/aiobi_update/notify.py
+'   aiobi-update/apply-helper.sh
+'   aiobi-update/polkit/com.aiobi.update.policy
+'
+' Canonical reference: Figure 4.14 — aiobi_update Package Class Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam classFontSize 12
+skinparam packageFontSize 14
+skinparam titleFontColor #7233CD
+skinparam class {
+  BorderColor #4A3C5C
+  ArrowColor #7233CD
+  HeaderBackgroundColor #F8F8F9
+}
+skinparam package {
+  BorderColor #4A3C5C
+  BackgroundColor #FDFBFF
+}
+
+title aiobi_update — static structure (CLI + popup + apt + policy + state + notify + root-side helper)
+
+package "aiobi_update" as PKG {
+
+  class "cli" as CLI <<module>> {
+    .. constants ..
+    LOG_FILE : str = "/var/log/aiobi-update.log"
+    NOTIFY_TRIGGER : str = "/run/aiobi-update/notify"
+    PKEXEC_HELPER : str = "/usr/local/lib/aiobi-update/apply-helper.sh"
+    EXIT_OK/EXIT_NO_UPDATES/EXIT_PARTIAL/EXIT_LOCK_HELD/EXIT_CONFIG_ERROR : int
+    .. entry points ..
+    +main(argv) : int
+    +build_parser() : ArgumentParser
+    +cmd_status(args) : int
+    +cmd_check(args) : int
+    +cmd_apply(args) : int
+    +cmd_apply_pkexec(args) : int
+    +cmd_apply_security_only(pol) : int
+    +cmd_apply_root_direct(args, pol) : int
+    +cmd_defer(args) : int
+    +cmd_notify_user(args) : int
+    +cmd_log(args) : int
+    +cmd_version(args) : int
+    .. helpers ..
+    -_has_gui() : bool
+    -_require_root(op, invoc) : int | None
+    -_tty_confirm(count) : bool
+    -_do_apply(pol, packages, assume_yes, show_gui) : (list, list)
+    -_log(message) : None
+    -_parse_defer(value) : timedelta
+  }
+
+  note right of CLI
+    _has_gui() gates the pkexec dispatch: requires
+    (DISPLAY or WAYLAND_DISPLAY) AND DBUS_SESSION_BUS_ADDRESS.
+    cmd_apply() routes to cmd_apply_pkexec() only when:
+    not --security-only AND not -y AND _has_gui() AND euid != 0.
+    Every other combination (sudo+TTY, -y non-interactive,
+    the overnight security-only timer) uses the root-direct path.
+  end note
+
+  class "popup" as Popup <<module — GTK4 + libadwaita>> {
+    APP_ID_PREFIX : str = "org.aiobi.Update"
+    +confirm(count: int) : bool
+    +run_with_progress(worker) : ApplyResult
+    +run_with_progress_stream(process) : ApplyResult
+    +summary(succeeded, failed, reboot_required) : None
+  }
+
+  class ApplyResult <<dataclass>> {
+    succeeded : list[str]
+    failed : list[str]
+    reboot_required : bool
+  }
+
+  note right of Popup
+    run_with_progress_stream() parses apply-helper.sh's stdout
+    contract line by line on a background thread, marshalled onto
+    the GTK main thread via GLib.idle_add:
+      AIOBI-PROGRESS: <n>/<total> <pkgname>
+      AIOBI-FAILED: <pkgname>
+      AIOBI-DONE: succeeded=<n> failed=<m>
+    reboot_required is read from /var/run/reboot-required directly,
+    never trusted from the helper (a crashed helper cannot report it).
+  end note
+
+  class "apt" as Apt <<module>> {
+    +apt_update() : None
+    +list_upgradable(blacklist) : list[str]
+    +upgrade_packages(names) : (list[str], list[str])
+    +upgrade_security_only() : CompletedProcess
+    +reboot_required() : bool
+  }
+  class AptError <<exception>>
+  class AptLockError <<exception>>
+
+  class "policy" as Policy <<module>> {
+    CONFIG_PATH : Path = "/etc/aiobi/update.conf"
+    +load_policy(path) : Policy
+  }
+  class Policy_ as "Policy" <<dataclass>> {
+    check_cron : str = "weekly-sunday-0600"
+    security_cron : str = "daily-0300"
+    auto_apply_security : bool = true
+    auto_apply_all : bool = false
+    blacklist : frozenset[str]
+    silent_check : bool = true
+    show_progress : bool = true
+    show_summary : bool = true
+  }
+  class PolicyError <<exception>>
+
+  class "state" as State <<module>> {
+    STATE_FILE : Path = "/var/lib/aiobi-update/state.json"
+    DEFERRED_FILE : Path = "/var/lib/aiobi-update/deferred_until"
+    +load() : UpdateState
+    +save(state) : None
+    +write_deferred_until(iso) : None
+    +read_deferred_until() : datetime | None
+    +is_deferred(now) : bool
+  }
+  class UpdateState <<dataclass>> {
+    last_check : str | None
+    updates_available : int = 0
+    packages : list[str]
+    last_apply : str | None
+    last_apply_result : str | None
+    reboot_required : bool = false
+  }
+
+  class "notify" as Notify <<module — notify-send wrapper>> {
+    +notify(summary, body, urgency, icon, actions) : str | None
+    +notify_updates_available(count) : str | None
+    +notify_reboot_required() : None
+    +notify_error(message) : None
+  }
+}
+
+' -- external, non-Python artefacts that close the privilege boundary --
+class "apply-helper.sh" as Helper <<bash script, runs as root>> {
+  argv : "[--security-only]"
+  .. stdout contract ..
+  AIOBI-PROGRESS: <n>/<total> <pkgname>
+  AIOBI-FAILED: <pkgname>
+  AIOBI-DONE: succeeded=<n> failed=<m>
+  .. exit codes ..
+  0 = all succeeded, 2 = partial, 3 = apt lock held, 10 = config error
+}
+
+class "com.aiobi.update.apply" as PolkitAction <<polkit action XML>> {
+  allow_active : "auth_admin_keep"
+  allow_inactive : "no"
+  allow_any : "no"
+  exec.path : "/usr/local/lib/aiobi-update/apply-helper.sh"
+}
+
+note bottom of PolkitAction
+  Installed to /usr/share/polkit-1/actions/com.aiobi.update.policy.
+  auth_admin_keep means the console session in front of the
+  machine gets a single auth prompt (kept for the session), not
+  a raw passwordless sudo — this is the boundary that replaces
+  "open a terminal and sudo" with an in-session polkit prompt.
+end note
+
+' -- relationships --
+CLI ..> Apt : apt_update(), list_upgradable(), upgrade_packages(),\nupgrade_security_only(), reboot_required()
+CLI ..> Policy : load_policy()
+CLI ..> State : load(), save(), write_deferred_until()
+CLI ..> Notify : notify_updates_available(),\nnotify_reboot_required(), notify_error()
+CLI ..> Popup : "lazy import — only in GUI-reachable paths\n(confirm / run_with_progress / run_with_progress_stream / summary)"
+
+Popup ..> ApplyResult : constructs / returns
+Apt ..> AptError
+Apt ..> AptLockError
+Policy ..> Policy_ : returns
+Policy ..> PolicyError
+State ..> UpdateState : returns
+
+CLI ..> Helper : "cmd_apply_pkexec():\nsubprocess.Popen(['/usr/bin/pkexec', PKEXEC_HELPER, ...])"
+Helper ..> PolkitAction : "authorised by (pkexec resolves the\naction from the exec.path annotation)"
+Popup ..> Helper : "run_with_progress_stream() reads\nHelper's stdout line by line"
+
+note bottom of CLI
+  PKEXEC_HELPER constant ("/usr/local/lib/aiobi-update/apply-helper.sh")
+  must stay byte-identical to the exec.path annotation in
+  com.aiobi.update.policy — polkit resolves the action by that exact
+  path, not by argv[0]. A divergence between the two breaks the
+  pkexec dispatch silently (polkit denies with no code-visible error).
+end note
+
+@enduml

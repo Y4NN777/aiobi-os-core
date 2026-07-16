@@ -1,0 +1,24 @@
+flowchart TB
+    subgraph guest["Aïobi OS guest — network namespace"]
+        direction TB
+        subgraph bind["Layer 1 — bind scope"]
+            ollama["ollama.service<br/>listens 127.0.0.1:11435 only<br/>(verified: ss -tlnp)"]
+            proxy["ollama-proxy.service<br/>listens 127.0.0.1:11434 only<br/>(verified: ss -tlnp)"]
+        end
+        subgraph kernel["Layer 2 — kernel netfilter (OUTPUT chain)"]
+            ipt4["iptables OUTPUT<br/>ACCEPT tcp dpt:11434 -> 127.0.0.0/8<br/>REJECT tcp dpt:11434 -> 0.0.0.0/0"]
+            ipt6["ip6tables OUTPUT<br/>ACCEPT tcp dpt:11434 -> ::1<br/>REJECT tcp dpt:11434 -> ::/0"]
+        end
+        subgraph consumers["Layer 3 — consumers, all loopback-only"]
+            term["aiobi-term"]
+            anyllm["AnythingLLM Desktop<br/>(configured to point at\nour system Ollama, not\nits own bundled daemon)"]
+        end
+    end
+    hostprobe["External probe\n(host machine, 192.168.122.42:11434)"]
+
+    term -->|POST 127.0.0.1:11434| proxy
+    anyllm -->|POST 127.0.0.1:11434| proxy
+    proxy --> ollama
+    ipt4 -. enforces .-> proxy
+    ipt6 -. enforces .-> proxy
+    hostprobe -.->|"curl :11434 -> connection refused"| ipt4

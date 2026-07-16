@@ -1,0 +1,189 @@
+@startuml aiobi-update-apply-sequence
+' Sequence diagram — aiobi-update apply flow, GUI+pkexec path and the
+' separate check/notify chain that leads a logged-in user into it.
+'
+' Conveys three independent chains, verified against the actual units
+' and source (no invented triggers):
+'
+'   (1) Weekly check -> conditional notify trigger
+'       aiobi-update.timer (Sun 06:00) -> aiobi-update.service (oneshot,
+'       runs as root) -> `aiobi-update --check` -> on packages found AND
+'       policy.silent_check, touches /run/aiobi-update/notify (a trigger
+'       file, never read for content) -> aiobi-update-notify.path (a
+'       systemd --USER unit, PathModified watch) -> aiobi-update-
+'       notify.service (user) -> `aiobi-update --notify-user` ->
+'       notify.notify_updates_available() (notify-send with action
+'       buttons) -> user picks "Update now" or "Remind me later".
+'
+'   (2) User-initiated / notification-triggered apply (GUI + pkexec)
+'       `aiobi-update --apply` as a normal user with a reachable GUI
+'       session routes to cmd_apply_pkexec(): popup.confirm() ->
+'       subprocess.Popen(['/usr/bin/pkexec', apply-helper.sh]) -> polkit
+'       auth prompt (com.aiobi.update.apply, auth_admin_keep) ->
+'       apply-helper.sh runs as root, streams AIOBI-PROGRESS / AIOBI-
+'       FAILED / AIOBI-DONE on stdout -> popup.run_with_progress_stream()
+'       parses it live -> popup.summary().
+'
+'   (3) TTY / non-GUI fallback (sudo, or -y, or the overnight
+'       security-only timer) — no pkexec, no polkit prompt: cli.py runs
+'       apt.py functions directly in-process because it is already root.
+'
+' Explicitly NOT part of this chain (common misreading corrected here):
+'   /etc/apt/apt.conf.d/52-aiobi-update-hooks (DPkg::Pre-Invoke /
+'   Post-Invoke -> hook.sh) is an independent AUDIT LOGGER. It appends a
+'   timestamp + phase + uid line to /var/log/aiobi-update.log for EVERY
+'   apt/dpkg transaction on the system, regardless of which tool
+'   triggered it (aiobi-update or a manual `apt install`). It does not
+'   write state.json, does not touch /run/aiobi-update/notify, and does
+'   not participate in the notify-user chain. Source: aiobi-update/
+'   hook.sh + aiobi-update/apt.conf.d/52-aiobi-update-hooks.
+'
+' Source read: aiobi_update/cli.py, popup.py, apt.py, policy.py,
+' state.py, notify.py; apply-helper.sh; polkit/com.aiobi.update.policy;
+' systemd/system/{aiobi-update.timer,aiobi-update.service,
+' aiobi-update-security.timer,aiobi-update-apply.service};
+' systemd/user/{aiobi-update-notify.path,aiobi-update-notify.service}.
+'
+' Canonical reference: Figure 4.15 — aiobi-update Apply Sequence
+' (native update manager, user -> root privilege boundary)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam titleFontColor #7233CD
+skinparam sequence {
+  ActorBorderColor #4A3C5C
+  ParticipantBorderColor #4A3C5C
+  ParticipantBackgroundColor #F8F8F9
+  LifeLineBorderColor #4A3C5C
+  ArrowColor #7233CD
+}
+
+title aiobi-update — check/notify chain + GUI-pkexec apply + TTY fallback
+
+actor "Logged-in user" as User
+participant "aiobi-update.timer\n(Sun 06:00, +/-1h jitter)" as Timer
+participant "aiobi-update.service\n(root, oneshot)" as CheckSvc
+participant "aiobi-update CLI\n(cli.py)" as CLI
+participant "aiobi_update.state" as State
+participant "aiobi-update-notify.path\n(systemd --user)" as NotifyPath
+participant "aiobi-update-notify.service\n(systemd --user)" as NotifySvc
+participant "aiobi_update.notify\n(notify-send)" as Notify
+participant "aiobi_update.popup\n(GTK4 + libadwaita)" as Popup
+participant "pkexec" as Pkexec
+participant "apply-helper.sh\n(root, via polkit)" as Helper
+participant "apt-get / apt" as Apt
+
+== (1) Weekly check -> conditional notify trigger ==
+
+Timer -> CheckSvc : OnCalendar Sun 06:00 (+jitter)
+activate CheckSvc
+CheckSvc -> CLI : aiobi-update --check
+activate CLI
+CLI -> Apt : apt_update(); list_upgradable(blacklist)
+Apt --> CLI : upgradable package names
+CLI -> State : save(state: last_check, updates_available, packages)
+alt packages found AND policy.silent_check
+  CLI -> CLI : touch /run/aiobi-update/notify\n(trigger file only, no content read)
+end
+deactivate CLI
+deactivate CheckSvc
+
+NotifyPath -> NotifyPath : PathModified fires on\n/run/aiobi-update/notify
+NotifyPath -> NotifySvc : activates (WantedBy=default.target,\nruns inside the user session already —\nDISPLAY/DBUS_SESSION_BUS_ADDRESS already correct)
+activate NotifySvc
+NotifySvc -> CLI : aiobi-update --notify-user
+activate CLI
+CLI -> State : load() -> updates_available, is_deferred()
+CLI -> Notify : notify_updates_available(count)
+Notify -> User : notify-send with actions\n["Update now", "Remind me later"]
+User --> Notify : chosen action
+alt chosen == "apply"
+  CLI -> CLI : subprocess.Popen(["aiobi-update", "--apply"])
+else chosen == "defer"
+  CLI -> CLI : subprocess.run(["aiobi-update", "--defer", "24h"])
+end
+deactivate CLI
+deactivate NotifySvc
+
+== (2) GUI + pkexec apply (the "Update now" path, or a manual\naiobi-update --apply from a normal user with a GUI session) ==
+
+User -> CLI : aiobi-update --apply
+activate CLI
+CLI -> CLI : _has_gui()?\n(DISPLAY or WAYLAND_DISPLAY) AND\nDBUS_SESSION_BUS_ADDRESS set, AND euid != 0,\nAND not --security-only, AND not -y
+CLI -> CLI : cmd_apply_pkexec(args)
+CLI -> State : load() -> best-known count\n(pre-elevation; root count is authoritative later)
+CLI -> Popup : confirm(count)
+activate Popup
+Popup -> User : GTK4/libadwaita dialog\n"N update(s) available — Apply now?"
+User --> Popup : Apply / Cancel
+Popup --> CLI : True/False
+deactivate Popup
+
+alt user cancelled
+  CLI -> User : return EXIT_OK, apt never touched
+else user confirmed
+  CLI -> Pkexec : subprocess.Popen(["/usr/bin/pkexec",\n"/usr/local/lib/aiobi-update/apply-helper.sh"])
+  activate Pkexec
+  Pkexec -> User : polkit auth prompt\n(com.aiobi.update.apply, auth_admin_keep,\nconsole session only)
+  alt auth denied or dismissed (pkexec exit 126/127)
+    Pkexec --> CLI : returncode in (126, 127)
+    CLI -> User : return EXIT_OK\n(treated as clean no-op, not a package failure)
+  else auth granted
+    Pkexec -> Helper : exec as root
+    activate Helper
+    Helper -> Apt : apt-get update -qq
+    Helper -> Apt : apt list --upgradable\n(filtered: blacklist, --security-only if set)
+    loop each upgradable package
+      Helper -> User : stdout: "AIOBI-PROGRESS: n/total pkgname"
+      Helper -> Apt : apt-get install --only-upgrade -y <pkg>
+      alt apt lock held mid-transaction
+        Helper -> CLI : exit 3 (AptLockError-equivalent)
+      else package failed (non-lock)
+        Helper -> User : stdout: "AIOBI-FAILED: pkgname"
+      end
+    end
+    Helper -> User : stdout: "AIOBI-DONE: succeeded=N failed=M"
+    Helper --> Pkexec : exit 0 / 2 / 3 / 10
+    deactivate Helper
+    Pkexec --> CLI : process exit code
+    deactivate Pkexec
+
+    note over Popup
+      run_with_progress_stream(process) runs concurrently
+      with the loop above, reading Helper's stdout line by
+      line on a background thread and marshalling each parsed
+      AIOBI-PROGRESS / AIOBI-FAILED / AIOBI-DONE line onto the
+      GTK main thread via GLib.idle_add.
+    end note
+
+    CLI -> Popup : summary(succeeded, failed, reboot_required)
+    Popup -> User : GTK4/libadwaita summary dialog
+    CLI -> State : save(last_apply, last_apply_result, packages=failed)
+    alt reboot_required
+      CLI -> Notify : notify_reboot_required()
+      Notify -> User : notify-send (urgency=critical)
+    end
+  end
+end
+deactivate CLI
+
+== (3) TTY / non-GUI fallback (sudo + terminal, -y, or the overnight\nsecurity-only timer — no pkexec, no polkit prompt) ==
+
+CLI -> CLI : _has_gui() == False,\nor euid == 0 already,\nor --security-only / -y given
+CLI -> CLI : cmd_apply_root_direct(args, pol)\nor cmd_apply_security_only(pol)
+CLI -> Apt : apt_update(); list_upgradable(blacklist)\n(direct in-process call — already root,\nno pkexec/polkit hop needed)
+alt interactive TTY and not -y
+  CLI -> User : _tty_confirm(count) — plain\n"Install N update(s)? [y/N]" prompt
+end
+CLI -> Apt : upgrade_packages(names)\nor upgrade_security_only()
+Apt --> CLI : succeeded, failed
+CLI -> State : save(...)
+
+note over Helper, Pkexec
+  Not part of this branch: apply-helper.sh and pkexec are only
+  invoked from the GUI path in section (2). A root shell running
+  aiobi-update directly calls aiobi_update.apt in-process.
+end note
+
+@enduml

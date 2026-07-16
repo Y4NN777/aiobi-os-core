@@ -1,0 +1,79 @@
+@startuml aiobi-term-cmd-sequence
+' Sequence diagram for `aiobi-term --cmd "<request>"`.
+'
+' Conveys: the single-LLM-call round trip that turns a natural-language
+' request into a shell-command suggestion, the strip_fences()
+' normalisation of the model's raw text, and the client-side
+' DESTRUCTIVE_PATTERNS safety net that prepends a warning line when the
+' model itself omitted one. aiobi-term never executes the suggestion —
+' the final printed line is copy/paste material the user reviews.
+'
+' Source read: aiobi-term (CLI script) — do_command(), call_ollama(),
+' strip_fences(), is_destructive(), CODE_SYSTEM, CMD_DECODING_OPTIONS,
+' DESTRUCTIVE_PATTERNS.
+'
+' Canonical reference: Figure 4.11 — aiobi-term --cmd Companion Sequence
+' (replaces the naming/model drift in the previous ai_sequence.png,
+' which showed "aiobi-ai" and a "qwen2.5-coder:0.5b" backend — both
+' superseded by the shipped "aiobi-term" binary and the unified
+' qwen2.5:1.5b model).
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam titleFontColor #7233CD
+skinparam sequence {
+  ActorBorderColor #4A3C5C
+  ParticipantBorderColor #4A3C5C
+  ParticipantBackgroundColor #F8F8F9
+  LifeLineBorderColor #4A3C5C
+  ArrowColor #7233CD
+}
+
+title aiobi-term --cmd — shell command suggestion flow
+
+actor User
+participant "Shell (bash)" as Shell
+participant "aiobi-term CLI" as CLI
+participant "Ollama daemon\n(127.0.0.1:11434 proxy -> :11435 backend)" as Ollama
+
+User -> Shell : aiobi-term --cmd "<request>"
+Shell -> CLI : exec, argv = ["--cmd", "<request>"]
+activate CLI
+
+CLI -> CLI : main() parses args\nargs.cmd == True
+CLI -> CLI : do_command(request)
+
+CLI -> Ollama : POST /api/generate\n{model: qwen2.5:1.5b,\n system: CODE_SYSTEM,\n prompt: request,\n options: CMD_DECODING_OPTIONS,\n stream: false}
+activate Ollama
+
+alt daemon unreachable
+  Ollama --> CLI : urllib.error.URLError
+  CLI -> Shell : stderr hint\n"cannot reach 127.0.0.1:11434 -\nrun systemctl start ollama and retry"
+  CLI -> CLI : sys.exit(2)
+else daemon responds
+  Ollama --> CLI : JSON {"response": "<model text>"}
+  deactivate Ollama
+
+  CLI -> CLI : strip_fences(response)\n-> cmd (1 line, or 2 lines if the\nmodel emitted its own "# ..." warning)
+  CLI -> CLI : first_line = cmd.split("\\n")[0].lstrip()
+
+  alt first_line does NOT start with "#"
+    CLI -> CLI : is_destructive(cmd)\nscan DESTRUCTIVE_PATTERNS\n(rm -rf, dd of=/dev/, mkfs, fdisk,\nchmod 777 /, fork bomb, curl|sh, ...)
+    alt pattern matched
+      CLI -> Shell : print("# WARNING: destructive pattern\ndetected (<reason>). Review the target\nand consequences before running.")
+    else no destructive pattern
+      note over CLI : nothing prepended - cmd is\nprinted as-is on the next line
+    end
+  else model already prefixed a "# " warning
+    note over CLI : lstrip().startswith("#") == pre-warned;\nis_destructive() is not even asked to add one
+  end
+
+  CLI -> Shell : print(cmd)
+end
+
+deactivate CLI
+Shell -> User : stdout shows warning line (if any)\nfollowed by the command
+User -> User : reads the suggestion and decides\nwhether to run it - aiobi-term never\nexecutes it on the user's behalf
+
+@enduml

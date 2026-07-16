@@ -1,0 +1,99 @@
+@startuml ollama-daemon-state
+' State diagram for the Ollama daemon lifecycle under Aïobi OS's
+' RAM-budget design.
+'
+' Conveys: how the AI stack converges to 0 MB resident memory when
+' idle, through two cooperating systemd units - the public,
+' socket-activatable ollama-proxy.socket / ollama-proxy.service
+' (systemd-socket-proxyd forwarding 127.0.0.1:11434 -> 127.0.0.1:11435)
+' fronting the private ollama.service backend (StopWhenUnneeded=yes).
+' Ollama itself does not support systemd socket activation (does not
+' read LISTEN_FDS), hence the proxy indirection.
+'
+' Source read: scripts/15-install-ollama.sh (ollama.service install +
+' loopback/keep-alive drop-in), scripts/19-tune-ram.sh (private-port
+' reconfiguration, ollama-proxy.socket, ollama-proxy.service,
+' StopWhenUnneeded).
+'
+' Canonical reference: Figure 4.8 — Ollama Two-Tier Socket-Activation
+' State Machine (replaces the single-tier lifecycle previously shown
+' in ai_model_lifecycle.png).
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam titleFontColor #7233CD
+skinparam state {
+  BorderColor #4A3C5C
+  BackgroundColor #F8F8F9
+  ArrowColor #7233CD
+  StartColor #7233CD
+  EndColor #4A3C5C
+}
+
+title Ollama daemon lifecycle — socket activation + idle unload (RAM budget)
+
+[*] --> Inactive
+
+state Inactive
+Inactive : ollama-proxy.socket listening on 127.0.0.1:11434 only
+Inactive : ollama-proxy.service - not started
+Inactive : ollama.service - not started
+Inactive : AI stack RAM: 0 MB
+
+state SocketActivated
+SocketActivated : systemd accepts the first TCP packet on :11434
+SocketActivated : triggers the unit associated with ollama-proxy.socket
+
+state ProxyStarting
+ProxyStarting : ollama-proxy.service starting
+ProxyStarting : ExecStartPre polls http://127.0.0.1:11435/api/tags
+ProxyStarting : bounded 30s wait before the proxy starts forwarding
+
+state BackendStarting
+BackendStarting : ollama.service starting (Requires=ollama.service)
+BackendStarting : OLLAMA_HOST=127.0.0.1:11435
+BackendStarting : OLLAMA_KEEP_ALIVE=5m
+
+state Active
+Active : model loaded, requests proxied 11434 -> 11435
+Active : Ollama tracks its own last-request timestamp\nfor the OLLAMA_KEEP_ALIVE window
+
+state IdleTimeout
+IdleTimeout : no traffic for the idle window
+IdleTimeout : proxy --exit-idle-time=300s (systemd-socket-proxyd)
+IdleTimeout : backend OLLAMA_KEEP_ALIVE=5m expires independently
+
+state StopWhenUnneeded
+StopWhenUnneeded : ollama-proxy.service exits on idle timeout
+StopWhenUnneeded : ollama.service loses its last Requires= reference
+StopWhenUnneeded : systemd stops ollama.service (StopWhenUnneeded=yes)
+
+Inactive --> SocketActivated : first packet on :11434
+SocketActivated --> ProxyStarting : systemd activates ollama-proxy.service
+ProxyStarting --> BackendStarting : Requires=ollama.service pulls the backend in
+BackendStarting --> Active : backend up\n(/api/tags responds on :11435)
+Active --> Active : request / request-complete\n(timestamp refreshed each call)
+Active --> IdleTimeout : 5 minutes since the last request
+IdleTimeout --> StopWhenUnneeded : socket idle-timeout elapses
+StopWhenUnneeded --> Inactive : backend + proxy unloaded,\nRAM back to 0 MB
+
+note right of ProxyStarting
+  Unit pair: ollama-proxy.socket / ollama-proxy.service
+  ExecStart=/usr/lib/systemd/systemd-socket-proxyd
+    --exit-idle-time=300 127.0.0.1:11435
+  Installed/enabled by scripts/19-tune-ram.sh
+end note
+
+note right of BackendStarting
+  Unit: ollama.service
+  Drop-in installed by scripts/15-install-ollama.sh,
+  rewritten by scripts/19-tune-ram.sh to:
+    OLLAMA_HOST=127.0.0.1:11435
+    OLLAMA_KEEP_ALIVE=5m
+    StopWhenUnneeded=yes
+  ollama.service's own multi-user.target.wants
+  autostart symlink is removed - it is only ever
+  started as a dependency of the proxy.
+end note
+
+@enduml

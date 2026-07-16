@@ -1,0 +1,93 @@
+@startuml aiobi-term-explain-sequence
+' Sequence diagram for `aiobi-term --explain "<cmd>" [--error "<text>"]`.
+'
+' Conveys: the two-layer architecture explicitly. Layer 1 is a
+' deterministic knowledge-base lookup (aiobi_term.knowledge.engine)
+' that ranks matching rules by (specificity, confidence, rule id) and
+' returns instantly on a hit - zero LLM latency, zero hallucination
+' risk, deterministic across identical inputs. Layer 2 is the Ollama
+' fallback (EXPLAIN_SYSTEM), only invoked on a KB miss, whose raw
+' output is squeezed into the same 2-line contract by
+' _format_explain_output(). Neither layer re-executes the failing
+' command - both reason only from the command shape and/or the pasted
+' stderr text.
+'
+' Source read: aiobi-term (do_explain, _format_explain_output,
+' EXPLAIN_SYSTEM, EXPLAIN_DECODING_OPTIONS), knowledge/engine.py
+' (lookup, _rank_key, _extract_command_parts, _render_try),
+' knowledge/loader.py (get_all_rules), knowledge/i18n.py (translate).
+'
+' Canonical reference: Figure 4.10 — --explain Two-Layer Sequence
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam titleFontColor #7233CD
+skinparam sequence {
+  ActorBorderColor #4A3C5C
+  ParticipantBorderColor #4A3C5C
+  ParticipantBackgroundColor #F8F8F9
+  LifeLineBorderColor #4A3C5C
+  ArrowColor #7233CD
+}
+
+title aiobi-term --explain — two-layer KB-then-LLM flow
+
+actor User
+participant "aiobi-term CLI" as CLI
+participant "aiobi_term.knowledge\n(engine + loader + i18n)" as Engine
+participant "Ollama daemon\n(127.0.0.1:11434 proxy -> :11435 backend)" as Ollama
+
+User -> CLI : aiobi-term --explain "<cmd>" [--error "<text>"]
+activate CLI
+CLI -> CLI : main() parses args\n-> do_explain(command, error)
+
+note over CLI
+  Guarded at import time:
+  _HAS_KNOWLEDGE_BASE = False if the
+  aiobi_term.knowledge import failed.
+  If False, layer 1 below is skipped
+  entirely for every call.
+end note
+
+CLI -> Engine : lookup(command, error, lang)
+activate Engine
+
+Engine -> Engine : get_all_rules() via loader\n(50 Rule objects, 12 category modules)
+Engine -> Engine : hits = [r for r in rules\nif r.match.matches(command, error)]
+
+alt hits found (KB hit)
+  Engine -> Engine : hits.sort(key=_rank_key, reverse=True)\nrank = (specificity, confidence, -sum(ord(id)))
+  Engine -> Engine : winner = hits[0]
+  Engine -> Engine : translate(winner.cause_key, lang)\n(i18n: en/fr dicts, EN fallback on\nmissing key, "[missing-i18n: key]" last resort)
+  Engine -> Engine : _render_try(winner.try_template, command)\nvia _extract_command_parts()\n({cmd}, {cmd_bin}, {arg1}, {arg2}, {argN})
+  Engine --> CLI : LookupResult(rule_id, category,\ncause, try_line, confidence)
+  deactivate Engine
+  CLI -> User : print(cause)\nprint("Try: " + try_line)
+  note right of CLI
+    Layer 1 exit — instant, deterministic,
+    no network call, no hallucination risk.
+  end note
+
+else no hits (KB miss)
+  Engine --> CLI : None
+  deactivate Engine
+
+  CLI -> CLI : build prompt =\n"Command: <cmd>"\n(+ "\nError output: <error>" if --error given)
+
+  CLI -> Ollama : POST /api/generate\n{system: EXPLAIN_SYSTEM,\n prompt,\n options: EXPLAIN_DECODING_OPTIONS,\n stream: false}
+  activate Ollama
+  Ollama --> CLI : JSON {"response": "<model text>"}
+  deactivate Ollama
+
+  CLI -> CLI : _format_explain_output(response)\nline1 = cause (first non-empty line)\nline2 = first line that looks like an\nalternative (try/use/instead/run/... or\nshort + no terminal punctuation)
+  CLI -> User : print(result)
+  note right of CLI
+    Layer 2 exit — same 2-line contract as
+    layer 1, but non-deterministic and pays
+    LLM inference latency + compute cost.
+  end note
+end
+
+deactivate CLI
+@enduml

@@ -1,0 +1,60 @@
+@startuml shell-integration-activity
+' Activity diagram: shell-integration entry point through to user
+' confirmation. Nice-to-have per the audit (priority: nice-to-have).
+'
+' Conveys: how a user reaches aiobi-term without typing the full command
+' by hand — either via the readline Ctrl-X Ctrl-A binding (shell-scoped,
+' works everywhere bash reads input) or via bash-completion (TAB-driven,
+' argument-scoped) — and what happens after aiobi-term returns a
+' suggestion: the destructive-pattern guardrail gates on user
+' confirmation before anything is ever run, and aiobi-term itself never
+' executes the suggestion on the user's behalf.
+'
+' Source read: Engineering log material on script 21 (readline binds:
+' TAB = menu-complete, Shift+Tab, show-all-if-ambiguous,
+' menu-complete-display-prefix) + aiobi-term do_command()/is_destructive().
+'
+' Canonical reference: Figure 4.13 — Shell-Integration Activity (nice-to-have)
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam titleFontColor #7233CD
+skinparam activity {
+  BorderColor #4A3C5C
+  BackgroundColor #F8F8F9
+  ArrowColor #7233CD
+  DiamondBorderColor #4A3C5C
+  DiamondBackgroundColor #F8F8F9
+}
+
+title Shell integration — from keystroke to (optional) execution
+
+start
+:user typing at the bash prompt;
+
+if (entry point?) then (readline bind\nCtrl-X Ctrl-A)
+  :readline invokes aiobi-term\non the current line buffer;
+else (TAB-driven\nbash-completion)
+  :bash-completion offers\nmenu-complete on TAB,\nShift+Tab cycles backward;
+  :user selects a completion\nor lets it fall through\nto aiobi-term --cmd;
+endif
+
+:aiobi-term --cmd "<request>"\n(see Figure 4.11 for the full round trip);
+
+if (destructive pattern detected?) then (yes)
+  :prepend\n"# WARNING: destructive pattern\ndetected (<reason>)."\nto the printed suggestion;
+else (no)
+endif
+
+:print suggestion to stdout\n(never executed automatically);
+
+if (user reviews and decides) then (run it)
+  :user manually pastes / confirms\nthe command at the prompt;
+  :shell executes\n(outside aiobi-term's control);
+else (discard)
+  :user ignores the suggestion;
+endif
+
+stop
+
+@enduml

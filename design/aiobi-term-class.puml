@@ -1,0 +1,179 @@
+@startuml aiobi-term-class
+' Class diagram of the aiobi-term subsystem.
+'
+' Conveys: the static structure split between the "aiobi-term" CLI
+' script (argparse entry point, Ollama HTTP client, output-shaping
+' helpers) and the aiobi_term.knowledge package (the deterministic
+' knowledge base consulted by --explain before any LLM call).
+' Category / Match / Rule / LookupResult are frozen dataclasses;
+' engine / i18n / loader are plain modules (no classes), shown here
+' as <<module>> boxes grouping their public functions. The rules
+' sub-package holds 12 category modules totalling 50 Rule instances
+' (verified against source, 2026-07).
+'
+' Source files read to produce this diagram (verified, no invented
+' APIs):
+'   aiobi-term (CLI script)
+'   aiobi_term/knowledge/rule.py
+'   aiobi_term/knowledge/engine.py
+'   aiobi_term/knowledge/i18n.py
+'   aiobi_term/knowledge/loader.py
+'   aiobi_term/knowledge/__init__.py
+'   aiobi_term/knowledge/rules/deprecated_tools.py (+ 11 sibling modules)
+'
+' Canonical reference: Figure 4.9 — aiobi_term.knowledge Package Class Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam classFontSize 12
+skinparam packageFontSize 14
+skinparam titleFontColor #7233CD
+skinparam class {
+  BorderColor #4A3C5C
+  ArrowColor #7233CD
+  HeaderBackgroundColor #F8F8F9
+}
+skinparam package {
+  BorderColor #4A3C5C
+  BackgroundColor #FDFBFF
+}
+
+title aiobi-term — static structure (CLI + knowledge base)
+
+class "aiobi-term" as CLI <<script>> {
+  .. constants ..
+  OLLAMA_ENDPOINT : str = "http://127.0.0.1:11434/api/generate"
+  MODEL : str = "qwen2.5:1.5b"
+  CHAT_SYSTEM : str
+  CODE_SYSTEM : str
+  EXPLAIN_SYSTEM : str
+  CMD_DECODING_OPTIONS : dict
+  EXPLAIN_DECODING_OPTIONS : dict
+  DESTRUCTIVE_PATTERNS : tuple[(Pattern, str), ...]
+  .. entry points ..
+  +main() : int
+  +do_chat(question: str) : None
+  +do_command(request: str) : None
+  +do_explain(command: str, error: str = "") : None
+  +do_repl() : None
+  .. helpers ..
+  +call_ollama(system, prompt, options, timeout) : str
+  +strip_fences(text: str) : str
+  +is_destructive(command: str) : str | None
+  +_format_explain_output(text: str) : str
+}
+
+note right of CLI
+  knowledge import is optional:
+    try: from aiobi_term.knowledge import lookup as _kb_lookup
+    except ImportError: _HAS_KNOWLEDGE_BASE = False
+  do_explain() only calls the KB when the import succeeded;
+  otherwise every --explain call goes straight to layer 2 (LLM).
+end note
+
+package "aiobi_term.knowledge" as KB {
+
+  enum Category {
+    DEPRECATED_TOOL
+    AIOBI_PURGED
+    SYSTEMD_ERROR
+    FS_ERROR
+    NETWORK_ERROR
+    PACKAGE_MGR
+    PYTHON_ERROR
+    GIT_ERROR
+    SSH_ERROR
+    DOCKER_ERROR
+    DISPLAY_ERROR
+    SHELL_BUILTIN
+  }
+
+  class Match <<frozen dataclass>> {
+    command_regex : Pattern[str] | None
+    error_regex : Pattern[str] | None
+    +matches(command: str, error: str) : bool
+    +specificity : int
+  }
+
+  class Rule <<frozen dataclass>> {
+    id : str
+    category : Category
+    match : Match
+    cause_key : str
+    try_template : str
+    confidence : int = 5
+    since : str | None
+    references : tuple[str, ...]
+  }
+
+  class LookupResult <<frozen dataclass>> {
+    rule_id : str
+    category : Category
+    cause : str
+    try_line : str
+    confidence : int
+  }
+
+  class "engine" as Engine <<module>> {
+    +lookup(command: str, error: str = "", lang: Lang | None = None) : LookupResult | None
+    -_rank_key(rule: Rule) : tuple[int, int, str]
+    -_extract_command_parts(command: str) : dict[str, str]
+    -_render_try(template: str, command: str) : str
+  }
+
+  class "i18n" as I18n <<module>> {
+    Lang = Literal["en", "fr"]
+    MESSAGES_EN : dict[str, str]
+    MESSAGES_FR : dict[str, str]
+    +detect_language() : Lang
+    +translate(key: str, lang: Lang | None = None) : str
+  }
+
+  class "loader" as Loader <<module>> {
+    -_ALL : tuple[Rule, ...]
+    +get_all_rules() : tuple[Rule, ...]
+    +get_rules_by_category(category_value: str) : tuple[Rule, ...]
+    +get_rule_by_id(rule_id: str) : Rule | None
+  }
+
+  package "rules" as RulesPkg {
+    class deprecated_tools <<module>> { RULES : tuple[Rule, ...] }
+    class aiobi_purged <<module>> { RULES : tuple[Rule, ...] }
+    class systemd_errors <<module>> { RULES : tuple[Rule, ...] }
+    class filesystem_errors <<module>> { RULES : tuple[Rule, ...] }
+    class network_errors <<module>> { RULES : tuple[Rule, ...] }
+    class package_mgr <<module>> { RULES : tuple[Rule, ...] }
+    class python_errors <<module>> { RULES : tuple[Rule, ...] }
+    class git_errors <<module>> { RULES : tuple[Rule, ...] }
+    class ssh_errors <<module>> { RULES : tuple[Rule, ...] }
+    class docker_errors <<module>> { RULES : tuple[Rule, ...] }
+    class xorg_wayland <<module>> { RULES : tuple[Rule, ...] }
+    class shell_builtins <<module>> { RULES : tuple[Rule, ...] }
+  }
+}
+
+' -- relationships --
+CLI ..> Engine : "knowledge.lookup()\n(re-exported by knowledge/__init__.py)"
+
+Engine ..> Rule : ranks / reads
+Engine ..> Match : "match.matches(command, error)"
+Engine ..> LookupResult : constructs
+Engine ..> I18n : "translate(cause_key, lang)"
+Engine ..> Loader : "get_all_rules()"
+
+Rule "1" *-- "1" Match : match
+Rule --> Category : category
+LookupResult --> Category : category
+
+Loader ..> RulesPkg : "aggregates RULES\nfrom every submodule (_ALL)"
+RulesPkg ..> Rule : instantiates
+
+note bottom of RulesPkg
+  50 Rule instances across 12 category modules
+  (counted against source, 2026-07-15). Every
+  cause_key referenced here must exist in
+  i18n.MESSAGES_EN (canonical) and ideally in
+  MESSAGES_FR; missing FR keys fall back to EN.
+end note
+
+@enduml

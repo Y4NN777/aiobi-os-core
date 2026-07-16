@@ -1,0 +1,23 @@
+C4Container
+    title AI Layer — Container view (Aïobi OS)
+
+    Person(user, "Terminal / Desktop user")
+
+    System_Boundary(os, "Aïobi OS — custom Ubuntu 24.04 base") {
+        Container(term, "aiobi-term", "Python 3, stdlib-only CLI", "Shell-integrated NL-to-command, chat, --explain. Installed at /usr/local/lib/aiobi-term/aiobi_term/")
+        Container(kb, "aiobi_term.knowledge", "Python package, in-process", "Deterministic rule engine: 50 Rule objects / 12 categories. No network call.")
+        Container(anyllm, "AnythingLLM Desktop", "Electron AppImage", "Multimodal chat + Desktop Assistant (Ctrl+/), vision-capable")
+        Container(proxy, "ollama-proxy.socket/.service", "systemd-socket-proxyd", "Public-facing on 127.0.0.1:11434, socket-activated, exit-idle-time=300s")
+        Container(ollama, "ollama.service", "Ollama daemon", "Private on 127.0.0.1:11435, StopWhenUnneeded=yes, serves qwen2.5:1.5b + qwen3-vl:2b-instruct-q8_0")
+        Container(fw, "iptables / ip6tables AI-Egress-Filter", "netfilter OUTPUT chain", "REJECT on tcp dpt:11434 for any destination outside 127.0.0.1/8 and ::1")
+        ContainerDb(models, "Model store", "/usr/share/ollama/.ollama/models", "3.4 GB, first-boot pull, not baked into the ISO")
+    }
+
+    Rel(user, term, "invokes", "readline / Ctrl-X Ctrl-A / shell")
+    Rel(user, anyllm, "chats / captures screen")
+    Rel(term, kb, "knowledge.lookup()", "in-process, deterministic")
+    Rel(term, proxy, "POST /api/generate", "HTTP, loopback only — on KB miss or --cmd/--chat")
+    Rel(anyllm, proxy, "POST /api/generate + /api/chat", "HTTP, loopback only")
+    Rel(proxy, ollama, "forwards", "127.0.0.1:11435, socket-activated chain")
+    Rel(ollama, models, "loads / unloads", "on demand, OLLAMA_KEEP_ALIVE=5m")
+    Rel(fw, ollama, "enforces zero-egress", "kernel-level, defense-in-depth")

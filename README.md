@@ -41,10 +41,12 @@ aiobi-os-core/
 ├── LICENSE
 ├── SECURITY.md
 ├── scripts/          # 22 numbered chroot scripts + run-all.sh + validate.sh + tests/
+│   └── base-iso/     # 6 numbered Phase-1 scripts (branding, GDM, Plymouth, GRUB, dpkg-divert)
 ├── aiobi-term/       # terminal AI assistant (CLI + Python package + readline)
 ├── aiobi-update/     # native update mechanism (CLI + systemd units + polkit + apt hooks)
 ├── config/           # dconf profile + keyfiles + local.d/
-├── design/           # architecture UMLs
+├── design/           # architecture UMLs (PNG + PlantUML/Mermaid sources + narrative + audit specs)
+├── artefact/         # attested pipeline execution log (thesis annex source)
 ├── icons/            # AI-native SVG placeholders
 └── aiobi-theme/      # legacy overlay stylesheets (superseded by script 03)
 ```
